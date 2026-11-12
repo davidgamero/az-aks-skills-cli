@@ -110,3 +110,20 @@ git worktree add ../search-experiment -b feat/search-experiment
 
 Tests use a fake Azure CLI and temporary catalogs; no Azure login or network is
 needed. The included skills are small examples for exercising the interface.
+
+## Isolated Copilot benchmark
+
+[`docs/benchmark.md`](docs/benchmark.md) describes the runnable skills-vs-no-skills
+experiment: stateful fake clusters, scripted success/errors across a captured
+99-command AKS registry, five research-derived scenarios, rootless/Docker
+containers, timestamped call traces, state-based scoring, and model/network metrics.
+
+It uses your local Copilot CLI (`gpt-6.1-sol` by default), with model selection and
+optional Azure AI Foundry BYOK. The mock never delegates to the real Azure CLI.
+Run `check` to verify containment, `replay` to validate fixtures, then `run` for
+actual paired agent trials. Full setup and interpretation guidance are in the
+benchmark document.
+
+The [initial Sol pilot results](docs/benchmark-pilot.md) include 10 guided-use
+trials and four passive-discovery trials. All tasks succeeded, but guided skills
+added overhead in this small pilot; passive availability produced no skill reads.

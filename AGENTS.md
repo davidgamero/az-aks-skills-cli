@@ -11,5 +11,14 @@ a PATH shim rather than an Azure CLI extension. Read `docs/design.md` first.
 - Run `python3 -m unittest discover -s tests -v` after changing routing or CLI behavior.
 - Keep examples and the documented command interface aligned with implementation.
 
+The benchmark under `bench/` is separate from the passthrough shim. Read
+`docs/benchmark.md` before changing it. It must never delegate to real Azure.
+State, fixtures, scoring and authoritative traces stay outside agent containers.
+The benchmark alone depends on `bench/requirements.txt` (JMESPath).
+Run its tests with:
+`PYTHONPATH=bench .venv-bench/bin/python -m unittest discover -s bench/tests -v`.
+Keep replay evidence distinct from live model trials, and modeled API counts
+distinct from measured model traffic. Do not commit raw benchmark artifacts.
+
 Worktree layout: `main/` is the primary checkout; sibling directories are linked
 worktrees. Create branches with `git worktree add ../<name> -b <branch>`.
