@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skills": [
+    {
+      "id": "aks-upgrade",
+      "title": "Plan an AKS upgrade",
+      "description": "Inspect available Kubernetes versions and prepare an upgrade plan.",
+      "tags": ["upgrade", "kubernetes", "versions", "maintenance"],
+      "path": "aks-upgrade/SKILL.md"
+    },
+    {
+      "id": "aks-pod-troubleshooting",
+      "title": "Investigate unhealthy AKS pods",
+      "description": "Collect pod events and logs to diagnose scheduling and startup failures.",
+      "tags": ["pods", "troubleshooting", "logs", "crashloopbackoff"],
+      "path": "aks-pod-troubleshooting/SKILL.md"
+    },
+    {
+      "id": "aks-node-pools",
+      "title": "Inspect AKS node pools",
+      "description": "Review node pool versions, capacity, and autoscaling configuration.",
+      "tags": ["nodes", "nodepool", "capacity", "autoscaling"],
+      "path": "aks-node-pools/SKILL.md"
+    }
+  ]
+}
