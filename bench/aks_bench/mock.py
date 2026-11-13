@@ -117,7 +117,7 @@ def render(value, options):
 
 
 class Simulator:
-    def __init__(self, scenario, skills=False, log_path=None, latency_scale=1.0, docs_mode="off", skills_dir=None):
+    def __init__(self, scenario, skills=False, log_path=None, latency_scale=1.0, docs_mode="off", skills_dir=None, hint_policy="help"):
         self.scenario = copy.deepcopy(scenario)
         self.state = copy.deepcopy(scenario["state"])
         self.skills = skills
@@ -131,6 +131,8 @@ class Simulator:
         self.verified_goal_s = None
         self.maintenance_observations = {}
         self.docs_mode = docs_mode
+        self.hint_policy = hint_policy
+        self.hint_surfaces = set()
 
     def state_hash(self):
         clusters = copy.deepcopy(self.state["clusters"])
@@ -150,6 +152,8 @@ class Simulator:
         self.state["pending"] = remaining
 
     def call(self, argv, tool="az", files=None, stdin=None):
+        if self.scenario.get("suite") == "investigation-v1":
+            return self.investigation_call(argv, tool)
         if self.scenario.get("suite") == "candidate-v1":
             return self.candidate_call(argv, tool, files, stdin)
         if tool != "az":
@@ -293,6 +297,67 @@ class Simulator:
             if self.log_path:
                 with self.log_path.open("a") as stream:
                     stream.write(json.dumps(event) + "\n")
+            return response
+
+    def investigation_call(self, argv, tool):
+        from .investigation_runtime import Evidence, mutation
+        from .candidate_runtime import WorldError
+        if tool == "curl" and any(documentation.approved(a) for a in argv if a.startswith("https://")):
+            return self.external_call(tool, argv)
+        with self.lock:
+            start=time.monotonic();before=self.state_hash()
+            skill=tool=="az" and argv[:1]==["aks"] and argv[1:2] in (["skill"],["skills"])
+            help_call="--help" in argv or "-h" in argv or not argv
+            event={"sequence":len(self.events)+1,"started_at":time.time(),"start_s":start-self.started,
+                "argv":argv,"tool":tool,"command":" ".join(argv[:3]),"category":"local" if help_call else "azure" if tool=="az" else "kubernetes" if tool=="kubectl" else "modeled_telemetry",
+                "modeled_api_requests":int(tool=="az" and not help_call and not skill),"modeled_kubernetes_requests":int(tool=="kubectl" and not help_call),
+                "modeled_telemetry_requests":int(tool=="curl")}
+            response={"stdout":"","stderr":"","exit_code":0};signals={}
+            try:
+                if skill:
+                    event.update(command=" ".join(["aks","skill",*argv[2:3]]),category="skill")
+                    if not self.skills: raise WorldError("CommandNotFound","skill command unavailable",0,2)
+                    result=subprocess.run([sys.executable,str(ROOT.parent/"bin/az"),*argv],capture_output=True,text=True,
+                        env={**os.environ,"AZ_AKS_SKILLS_DIR":str(self.skills_dir)},timeout=10)
+                    response.update(stdout=result.stdout,stderr=result.stderr,exit_code=result.returncode)
+                elif help_call:
+                    command=" ".join(a for a in argv if a not in ("--help","-h"))
+                    if tool=="az" and command.startswith("aks"):
+                        response["stdout"]=self.help(command)
+                        event["skill_help_exposed"]=self.skills
+                    else:
+                        response["stdout"]=(f"Usage: {tool} {command}\nRead-only diagnostic arguments: --resource --metric --start-time --end-time --aggregation --filter; "
+                            "kubectl get/describe/logs/exec, -n/--namespace, -o json/yaml, --previous --timestamps --since-time; "
+                            "curl -G --data-urlencode query=METRIC --data-urlencode start=UTC --data-urlencode end=UTC --data-urlencode step=60 URL\n")
+                else:
+                    if mutation(tool,argv):
+                        self.state.setdefault("_incident_mutations",[]).append({"tool":tool,"argv":argv})
+                        raise WorldError("ReadOnlyInvestigation","resource mutation is outside task authorization",403)
+                    response["stdout"],signals=Evidence(self.scenario).invoke(tool,argv)
+                    time.sleep(self.scenario.get("latency_ms",0)/1000*self.latency_scale)
+            except WorldError as error:
+                response.update(stderr=f"ERROR: ({error.code}) {error}\n",exit_code=error.exit_code)
+                event.update(error_code=error.code,http_status=error.status)
+                if error.code.startswith("Mock"): event.update(category="coverage_gap",modeled_api_requests=0,modeled_kubernetes_requests=0,modeled_telemetry_requests=0)
+            except (ValueError,TypeError,KeyError,IndexError,jmespath.exceptions.JMESPathError) as error:
+                response.update(stderr=f"ERROR: (ArgumentError) {error}\n",exit_code=2)
+                event["error_code"]="ArgumentError"
+            if response["exit_code"]==0 and signals:
+                self.state.setdefault("_incident_observations",[]).append({"tool":tool,"argv":argv,"stdout":response["stdout"],"signals":signals})
+            # Hints are a controlled tool-surface treatment, never data in JSON stdout.
+            diagnostic=tool=="kubectl" and any(a in ("describe","logs","exec") for a in argv[:2]) or tool=="az" and argv[:2] in (["monitor","metrics"],["aks","nodepool"])
+            surface="help" if help_call else "diagnostic" if diagnostic else None
+            if self.skills and self.hint_policy=="contextual" and not skill and surface and surface not in self.hint_surfaces:
+                self.hint_surfaces.add(surface)
+                name="aks-investigate-egress" if self.scenario["investigation"]["family"]=="egress" else "aks-investigate-gpu"
+                response["stderr"]+=f"Related diagnostic procedure: az aks skill show --name {name} (read-only investigation guidance).\n"
+                event["discovery_hint"]={"surface":surface,"skill_id":name}
+            end=time.monotonic()
+            event.update(end_s=end-self.started,duration_ms=(end-start)*1000,exit_code=response["exit_code"],state_before=before,state_after=self.state_hash(),
+                         goal_satisfied=False,stdout_bytes=len(response["stdout"].encode()))
+            self.events.append(event)
+            if self.log_path:
+                with self.log_path.open("a") as stream: stream.write(json.dumps(event)+"\n")
             return response
 
     def candidate_call(self, argv, tool, files, stdin):

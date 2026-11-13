@@ -1,5 +1,11 @@
 # Stateful AKS skills benchmark
 
+The current default is the [symptom-first investigation/discovery suite](investigation-discovery.md):
+seven intermittent-egress and GPU/KAITO cases. Use `discover` to compare no skills,
+help-only discovery and contextual diagnostic references. Earlier repair scenarios
+remain available by name. This extension retains identical task prompts and adds
+tool-surface exposure measurements without a prompt-hint mode.
+
 See [the initial GPT-6.1 Sol pilot](benchmark-pilot.md) for measured results from
 14 live, isolated trials.
 The [help-change rerun](benchmark-help-evaluation.md) records 14 further trials

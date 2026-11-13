@@ -6,6 +6,7 @@ import random
 from . import automatic
 from . import troubleshooting
 from . import candidate_fixtures, candidate_oracles
+from . import investigations
 
 
 SOURCES = {
@@ -14,12 +15,14 @@ SOURCES = {
     "upgrade": "https://learn.microsoft.com/en-us/azure/aks/upgrade-aks-control-plane",
     "stop": "https://learn.microsoft.com/en-us/azure/aks/start-stop-cluster",
 }
-NAMES = ("manual-scale", "autoscaler", "control-plane-upgrade", "stop-dev", "transient-scale") + automatic.NAMES + troubleshooting.NAMES + candidate_fixtures.NAMES
+NAMES = ("manual-scale", "autoscaler", "control-plane-upgrade", "stop-dev", "transient-scale") + automatic.NAMES + troubleshooting.NAMES + candidate_fixtures.NAMES + investigations.NAMES
 
 
 def make(name: str, seed: int = 1) -> dict:
     if name not in NAMES:
         raise ValueError(f"unknown scenario: {name}")
+    if name in investigations.NAMES:
+        return investigations.make(name, seed, make("manual-scale", seed))
     if name in candidate_fixtures.NAMES:
         return candidate_fixtures.make(name, seed, make("manual-scale", seed))
     if name in automatic.NAMES:
@@ -76,6 +79,8 @@ def make(name: str, seed: int = 1) -> dict:
 
 
 def grade(scenario: dict, state: dict) -> dict:
+    if scenario.get("suite") == "investigation-v1":
+        return investigations.grade(scenario,state)
     if scenario.get("suite") == "candidate-v1":
         return candidate_oracles.grade(scenario, state)
     if scenario["name"] in troubleshooting.NAMES:

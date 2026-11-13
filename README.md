@@ -132,7 +132,7 @@ needed. The included skills are small examples for exercising the interface.
 
 [`docs/benchmark.md`](docs/benchmark.md) describes the runnable skills-vs-no-skills
 experiment: stateful fake clusters, scripted success/errors across a captured
-99-command AKS registry, 27 research-derived scenarios, rootless/Docker
+99-command AKS registry, 34 research-derived scenarios, rootless/Docker
 containers, timestamped call traces, state-based scoring, and model/network metrics.
 
 It uses your local Copilot CLI (`gpt-6.1-sol` by default), with model selection and
@@ -163,6 +163,13 @@ tasks, with **zero skill reads**—no demonstrated skill-content benefit.
 
 ## Task-focused skill design
 
+The current default is the [investigation discovery suite](docs/investigation-discovery.md):
+seven symptom-first intermittent-networking and GPU/KAITO cases. `aks_bench discover`
+compares baseline, AKS-help discovery and contextual diagnostic references using
+identical prompts and evidence. Two new investigation procedures bring the catalog
+to 27 skills. The source review includes Azure/AKS-Skills, its maintained Microsoft
+successor and relevant Learn documentation.
+
 The [skill coverage and tuning guide](docs/skill-catalog-tuning.md) explains the
 original nine benchmark skills and the original-versus-revised content comparison.
 The [discovery trace review](docs/skill-discovery-review.md) shows when the agent
@@ -171,7 +178,7 @@ The [observed task/action map](docs/task-action-skill-map.md) maps those reads t
 specific workflows. The [FAQ/guide candidate map](docs/scenario-candidate-map.md)
 maps the 17 additional tasks across eight topics, with a source index and
 machine-readable scenario designs. Their primary fixtures are implemented;
-held-out variants remain future work. The benchmark catalog now has 25 skills.
+held-out variants remain future work. That earlier candidate evaluation used 25 skills.
 To inspect that catalog directly:
 
 ```sh

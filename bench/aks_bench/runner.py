@@ -24,6 +24,7 @@ from . import automatic
 from . import troubleshooting
 from . import catalogs
 from . import candidate_fixtures, candidate_solutions
+from . import investigations, investigation_solutions
 
 COPILOT_HOSTS = {"api.github.com", "api.githubcopilot.com", "api.individual.githubcopilot.com",
                  "api.business.githubcopilot.com", "api.enterprise.githubcopilot.com",
@@ -184,6 +185,8 @@ def telemetry(path):
 
 
 def oracle_commands(scenario):
+    if scenario.get("suite") == "investigation-v1":
+        return investigation_solutions.commands(scenario)
     if scenario.get("suite") == "candidate-v1":
         return candidate_solutions.commands(scenario)
     if scenario["name"] in troubleshooting.NAMES:
@@ -225,7 +228,7 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
     sim = Simulator(scenario, skills=skills, log_path=directory / "az-events.jsonl", latency_scale=args.latency_scale,
-                    docs_mode=getattr(args, "docs_mode", "off"), skills_dir=getattr(args, "skills_dir", None))
+                    docs_mode=getattr(args, "docs_mode", "off"), skills_dir=getattr(args, "skills_dir", None), hint_policy=getattr(args,"hint_policy","help"))
     prompt = scenario["prompt"]
     json_file(directory / "scenario.json", scenario)
     (directory / "prompt.txt").write_text(prompt + "\n")
@@ -275,8 +278,18 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
         isolation_path = artifacts / "isolation.json"
         isolation = json.loads(isolation_path.read_text()) if isolation_path.exists() else {}
     sim.advance()
+    if scenario.get("suite")=="investigation-v1" and mode!="replay":
+        path=workspace/"diagnosis.json"
+        try:
+            if path.resolve().is_relative_to(workspace.resolve()) and path.stat().st_size<=262144:
+                submission=json.loads(path.read_text())
+                if isinstance(submission,dict): sim.state["_incident_report"]=submission
+        except (OSError,ValueError): pass
     state_grade = grade(scenario, sim.state)
     final_verified = sim.verified_goal_s is not None
+    if scenario.get("suite")=="investigation-v1":
+        final_verified=state_grade["success"]
+        if final_verified: sim.first_goal_s=sim.verified_goal_s=elapsed
     if scenario.get("suite") == "candidate-v1":
         from .candidate_oracles import verified
         final_verified = verified(scenario, sim.state)
@@ -285,6 +298,7 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
               "condition": getattr(args, "condition", "skills" if skills else "baseline"),
               "catalog_sha256": catalogs.fingerprint(sim.skills_dir) if skills else None,
               "discovery": args.discovery, "mode": mode, "engine": args.engine if mode != "replay" else None,
+              "hint_policy":getattr(args,"hint_policy","help"),
               "requested_model": args.model if mode == "live" else None, "provider": args.provider if mode == "live" else None,
               "elapsed_s": elapsed, "time_to_goal_s": sim.first_goal_s,
               "time_to_verified_goal_s": sim.verified_goal_s, "timed_out": timeout,
@@ -301,6 +315,10 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
               "modeled_kubernetes_requests": sum(e.get("modeled_kubernetes_requests", 0) for e in sim.events),
               "skill_calls": sum(e["category"] == "skill" for e in sim.events),
               "skill_reads": sum(e["command"] == "aks skill show" and e["exit_code"] == 0 and not any(a in ("--help", "-h") for a in e["argv"]) for e in sim.events),
+              "hint_exposures":sum(bool(e.get("discovery_hint")) for e in sim.events),
+              "skill_help_exposures":sum(bool(e.get("skill_help_exposed")) for e in sim.events),
+              "first_skill_read_s":next((e["end_s"] for e in sim.events if e["command"]=="aks skill show" and e["exit_code"]==0 and not any(a in ("--help","-h") for a in e["argv"])),None),
+              "modeled_telemetry_requests":sum(e.get("modeled_telemetry_requests",0) for e in sim.events),
               "azure_cli_calls": sum(e["category"] == "azure" for e in sim.events),
               "modeled_api_requests": sum(e["modeled_api_requests"] for e in sim.events),
               "failed_az_calls": sum(e.get("tool", "az") == "az" and e["exit_code"] != 0 for e in sim.events),
@@ -321,6 +339,9 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
 
 def report(directory):
     results = [json.loads(p.read_text()) for p in sorted(Path(directory).glob("*/result.json"))]
+    if any(r.get("condition") in ("help","contextual") for r in results):
+        from .investigation_report import report as investigation_report
+        return investigation_report(directory,results)
     if any(r.get("condition") in ("original", "revised") for r in results):
         return catalogs.comparison_report(directory, results)
     grouped = {}
@@ -380,7 +401,7 @@ def report(directory):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Stateful, isolated AKS skill benchmark")
-    parser.add_argument("action", choices=("run", "compare", "replay", "check", "report", "coverage"))
+    parser.add_argument("action", choices=("run", "compare", "discover", "replay", "check", "report", "coverage"))
     parser.add_argument("--output", type=Path, default=Path("benchmark-results") / time.strftime("%Y%m%d-%H%M%S"))
     parser.add_argument("--model", default="gpt-6.1-sol")
     parser.add_argument("--provider", choices=("copilot", "foundry"), default="copilot")
@@ -388,7 +409,7 @@ def main(argv=None):
     parser.add_argument("--engine", choices=("bwrap", "docker"), default="bwrap")
     parser.add_argument("--bwrap", default=shutil.which("bwrap") or "bwrap")
     parser.add_argument("--copilot", default=shutil.which("copilot") or "copilot")
-    parser.add_argument("--scenarios", nargs="+", choices=NAMES, default=list(NAMES))
+    parser.add_argument("--scenarios", nargs="+", choices=NAMES, default=list(investigations.NAMES))
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=180)
@@ -407,6 +428,8 @@ def main(argv=None):
         parser.error("--fixture requires exactly one --scenarios entry")
     if args.action == "compare" and args.reference_skills_dir is None:
         parser.error("compare requires --reference-skills-dir")
+    if args.action=="discover" and any(n not in investigations.NAMES for n in args.scenarios):
+        parser.error("discover requires investigation scenarios")
     if args.action == "coverage":
         print(json.dumps({"recognized": len(COMMANDS), "semantic": sorted(SEMANTIC),
                           "fixture_required": sorted(set(COMMANDS) - SEMANTIC)}, indent=2))
@@ -456,6 +479,7 @@ def main(argv=None):
     for repeat in range(args.repeats):
         for scenario in args.scenarios:
             arms = [("baseline", False, selected_dir), ("skills", True, selected_dir)]
+            if args.action=="discover": arms=[("baseline",False,selected_dir),("help",True,selected_dir),("contextual",True,selected_dir)]
             if args.action == "compare":
                 arms = [("baseline", False, selected_dir), ("original", True, original_dir), ("revised", True, selected_dir)]
             rng.shuffle(arms)
@@ -464,6 +488,7 @@ def main(argv=None):
                 print(f"Starting {label} ({mode}, {args.model})", flush=True)
                 trial_args = argparse.Namespace(**vars(args))
                 trial_args.skills_dir, trial_args.condition = skills_dir, condition
+                trial_args.hint_policy="contextual" if condition=="contextual" else "help"
                 result = trial(trial_args, scenario, args.seed + repeat, skills, args.output / label, mode=mode)
                 invalid = invalid or (mode == "live" and not result["valid_trial"])
                 print(json.dumps({k: result[k] for k in ("success", "valid_trial", "elapsed_s", "az_calls", "skill_calls", "modeled_api_requests")}), flush=True)

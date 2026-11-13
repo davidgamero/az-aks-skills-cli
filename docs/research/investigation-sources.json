@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-11-13",
+  "snapshot_directory": "benchmark-results/investigation-sources-20261113",
+  "notes": "Azure/AKS-Skills is deprecated. Current skills are mirrored from GitHub-Copilot-for-Azure into microsoft/skills. Procedures below inform independently authored benchmark skills; source contents are not scenario answers.",
+  "sources": [
+    {"id":"aks-skills-readme","url":"https://raw.githubusercontent.com/Azure/AKS-Skills/7fac4bc786f0bca2a353a92e100f72a132111ef6/README.md"},
+    {"id":"skill-contract","url":"https://raw.githubusercontent.com/Azure/AKS-Skills/7fac4bc786f0bca2a353a92e100f72a132111ef6/docs/skill-contract.md"},
+    {"id":"troubleshooting","url":"https://raw.githubusercontent.com/microsoft/skills/f03ec5392f7a0f3aca12af47477e92f1edf7b44c/.github/plugins/aks-skills/skills/aks-troubleshooting/SKILL.md"},
+    {"id":"networking","url":"https://raw.githubusercontent.com/microsoft/skills/f03ec5392f7a0f3aca12af47477e92f1edf7b44c/.github/plugins/aks-skills/skills/aks-troubleshooting/networking.md"},
+    {"id":"network-path","url":"https://raw.githubusercontent.com/microsoft/skills/f03ec5392f7a0f3aca12af47477e92f1edf7b44c/.github/plugins/aks-skills/skills/aks-troubleshooting/references/azure-network-path.md"},
+    {"id":"network-capture","url":"https://raw.githubusercontent.com/microsoft/skills/f03ec5392f7a0f3aca12af47477e92f1edf7b44c/.github/plugins/aks-skills/skills/aks-network-capture/SKILL.md"},
+    {"id":"gpu-scheduling","url":"https://raw.githubusercontent.com/microsoft/skills/f03ec5392f7a0f3aca12af47477e92f1edf7b44c/.github/plugins/aks-skills/skills/aks-gpu-inference/references/gpu-scheduling.md"},
+    {"id":"gpu-observability","url":"https://raw.githubusercontent.com/microsoft/skills/f03ec5392f7a0f3aca12af47477e92f1edf7b44c/.github/plugins/aks-skills/skills/aks-gpu-inference/references/gpu-observability.md"},
+    {"id":"kaito-readiness","url":"https://raw.githubusercontent.com/microsoft/skills/f03ec5392f7a0f3aca12af47477e92f1edf7b44c/.github/plugins/aks-skills/skills/aks-gpu-inference/references/kaito-workspaces.md"},
+    {"id":"snat","url":"https://learn.microsoft.com/en-us/azure/aks/troubleshoot-source-network-address-translation"},
+    {"id":"localdns","url":"https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/connectivity/dns/troubleshoot-localdns"},
+    {"id":"managed-gpu","url":"https://learn.microsoft.com/en-us/azure/aks/aks-managed-gpu-nodes"},
+    {"id":"gpu-metrics","url":"https://learn.microsoft.com/en-us/azure/aks/best-practices-gpu-observability"},
+    {"id":"kaito","url":"https://learn.microsoft.com/en-us/azure/aks/ai-toolchain-operator"},
+    {"id":"sre-skills","url":"https://learn.microsoft.com/en-us/azure/sre-agent/skills"}
+  ]
+}
