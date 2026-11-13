@@ -3,6 +3,8 @@
 import copy
 import random
 
+from . import automatic
+
 
 SOURCES = {
     "scale": "https://learn.microsoft.com/en-us/azure/aks/scale-cluster",
@@ -10,12 +12,14 @@ SOURCES = {
     "upgrade": "https://learn.microsoft.com/en-us/azure/aks/upgrade-aks-control-plane",
     "stop": "https://learn.microsoft.com/en-us/azure/aks/start-stop-cluster",
 }
-NAMES = ("manual-scale", "autoscaler", "control-plane-upgrade", "stop-dev", "transient-scale")
+NAMES = ("manual-scale", "autoscaler", "control-plane-upgrade", "stop-dev", "transient-scale") + automatic.NAMES
 
 
 def make(name: str, seed: int = 1) -> dict:
     if name not in NAMES:
         raise ValueError(f"unknown scenario: {name}")
+    if name in automatic.NAMES:
+        return automatic.make(name, seed, make("manual-scale", seed))
     rng = random.Random(seed)
     suffix = rng.randrange(1000, 9999)
     rg, cluster_name = f"rg-dev-{suffix}", f"aks-dev-{suffix}"
@@ -65,6 +69,8 @@ def make(name: str, seed: int = 1) -> dict:
 
 
 def grade(scenario: dict, state: dict) -> dict:
+    if scenario["name"] in automatic.NAMES:
+        return automatic.grade(scenario, state)
     initial = scenario["initial_state"]["clusters"][0]
     clusters = state["clusters"]
     target = next((c for c in clusters if c["id"] == initial["id"]), None)

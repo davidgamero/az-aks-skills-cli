@@ -130,7 +130,7 @@ needed. The included skills are small examples for exercising the interface.
 
 [`docs/benchmark.md`](docs/benchmark.md) describes the runnable skills-vs-no-skills
 experiment: stateful fake clusters, scripted success/errors across a captured
-99-command AKS registry, five research-derived scenarios, rootless/Docker
+99-command AKS registry, seven research-derived scenarios, rootless/Docker
 containers, timestamped call traces, state-based scoring, and model/network metrics.
 
 It uses your local Copilot CLI (`gpt-6.1-sol` by default), with model selection and
@@ -142,3 +142,6 @@ benchmark document.
 The [initial Sol pilot results](docs/benchmark-pilot.md) include 10 guided-use
 trials and four passive-discovery trials. All tasks succeeded, but guided skills
 added overhead in this small pilot; passive availability produced no skill reads.
+The [help-change rerun](docs/benchmark-help-evaluation.md) compares the updated
+help interface. [Two AKS Automatic scenarios](docs/aks-automatic-scenarios.md)
+cover managed cluster creation and separate Kubernetes/node-image maintenance windows.

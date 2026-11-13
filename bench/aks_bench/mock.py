@@ -4,6 +4,7 @@ import copy
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -13,6 +14,7 @@ import time
 import jmespath
 
 from .scenarios import grade
+from . import automatic
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = json.loads((ROOT / "commands.json").read_text())["commands"]
@@ -22,14 +24,22 @@ SEMANTIC = {
     "aks nodepool list", "aks nodepool show", "aks nodepool add", "aks nodepool delete",
     "aks nodepool scale", "aks nodepool update", "aks nodepool upgrade", "aks nodepool get-upgrades",
     "aks nodepool start", "aks nodepool stop", "aks nodepool wait",
+    "aks maintenanceconfiguration add", "aks maintenanceconfiguration update",
+    "aks maintenanceconfiguration delete", "aks maintenanceconfiguration list", "aks maintenanceconfiguration show",
 }
+AUXILIARY = {"group show", "group exists", "provider show"}
 ALIASES = {"-g": "--resource-group", "-n": "--name", "-o": "--output", "-l": "--location", "-y": "--yes", "-h": "--help", "-k": "--kubernetes-version"}
 FLAGS = {"--yes", "--help", "--version", "--debug", "--verbose", "--only-show-errors", "--no-wait",
          "--control-plane-only", "--enable-cluster-autoscaler", "--disable-cluster-autoscaler",
-         "--update-cluster-autoscaler", "--generate-ssh-keys", "--updated", "--created", "--deleted", "--exists"}
+         "--update-cluster-autoscaler", "--generate-ssh-keys", "--updated", "--created", "--deleted", "--exists",
+         "--enable-hosted-system", "--enable-managed-identity"}
 VALUES = {"--resource-group", "--name", "--cluster-name", "--nodepool-name", "--node-count", "--min-count",
           "--max-count", "--kubernetes-version", "--output", "--query", "--subscription", "--location",
-          "--mode", "--node-vm-size", "--interval", "--timeout", "--custom"}
+          "--mode", "--node-vm-size", "--interval", "--timeout", "--custom", "--sku", "--tier",
+          "--node-provisioning-mode", "--auto-upgrade-channel", "--node-os-upgrade-channel",
+          "--network-plugin", "--network-plugin-mode", "--network-dataplane", "--network-policy", "--outbound-type",
+          "--schedule-type", "--day-of-week", "--interval-weeks", "--duration", "--start-time", "--utc-offset",
+          "--start-date", "--namespace"}
 
 
 class CLIError(Exception):
@@ -61,7 +71,16 @@ def parse(argv):
     return " ".join(words), options
 
 
+def public_data(value):
+    if isinstance(value, dict):
+        return {key: public_data(item) for key, item in value.items() if not key.startswith("_")}
+    if isinstance(value, list):
+        return [public_data(item) for item in value]
+    return value
+
+
 def render(value, options):
+    value = public_data(value)
     if "--query" in options:
         try:
             value = jmespath.search(options["--query"], value)
@@ -100,6 +119,7 @@ class Simulator:
         self.latency_scale = latency_scale
         self.first_goal_s = None
         self.verified_goal_s = None
+        self.maintenance_observations = {}
 
     def state_hash(self):
         return hashlib.sha256(json.dumps(self.state["clusters"], sort_keys=True).encode()).hexdigest()
@@ -148,7 +168,7 @@ class Simulator:
                     response["stdout"] = render([account] if command.endswith("list") else account, opts)
                 elif command == "account set":
                     response["stdout"] = ""
-                elif command not in COMMANDS:
+                elif command not in COMMANDS and command not in AUXILIARY:
                     if not command.startswith("aks "):
                         event["category"] = "coverage_gap"
                     raise CLIError("CommandNotFound", f"'{command}' is not a recognized command in this simulator", 0, 2)
@@ -158,10 +178,10 @@ class Simulator:
                     scripted = next((r for r in self.scenario.get("responses", [])
                                      if r["command"] == command and all(opts.get(k) == v for k, v in r.get("match", {}).items())
                                      and (not r.get("occurrences") or count in r["occurrences"])), None)
-                    if command not in SEMANTIC and not scripted:
+                    if command not in SEMANTIC and command not in AUXILIARY and not scripted:
                         event["category"] = "coverage_gap"
                         raise CLIError("MockNotImplemented", f"'{command}' is recognized but requires a scenario response fixture", 0, 2)
-                    if command in SEMANTIC:
+                    if command in SEMANTIC or command in AUXILIARY:
                         unknown = set(opts) - FLAGS - VALUES
                         if unknown:
                             event["category"] = "coverage_gap"
@@ -201,6 +221,8 @@ class Simulator:
                 self.state["pending"] = pending_snapshot
                 response.update(stderr=f"ERROR: ({error.code}) {error}\n", exit_code=error.exit_code)
                 event.update(error_code=error.code, http_status=error.status or None)
+                if error.code.startswith("Mock"):
+                    event["category"] = "coverage_gap"
             except (ValueError, KeyError, TypeError) as error:
                 self.state["clusters"] = snapshot
                 self.state["pending"] = pending_snapshot
@@ -215,6 +237,15 @@ class Simulator:
                 read = read or event["command"] == "aks nodepool list" or (
                     event["command"] == "aks nodepool show" and
                     opts.get("--name", opts.get("--nodepool-name")) == "apps")
+            if self.scenario["name"] == "automatic-maintenance":
+                configs = self.state["clusters"][0].get("_maintenanceConfigurations", {}) if self.state["clusters"] else {}
+                if response["exit_code"] == 0 and response["stdout"].strip():
+                    if event["command"] == "aks maintenanceconfiguration list":
+                        self.maintenance_observations.update(copy.deepcopy(configs))
+                    elif event["command"] == "aks maintenanceconfiguration show" and opts.get("--name") in configs:
+                        self.maintenance_observations[opts["--name"]] = copy.deepcopy(configs[opts["--name"]])
+                read = all(name in configs and self.maintenance_observations.get(name) == configs[name]
+                           for name in (automatic.AUTO_SCHEDULE, automatic.OS_SCHEDULE))
             if goal and response["exit_code"] == 0 and read and response["stdout"].strip():
                 self.verified_goal_s = self.verified_goal_s or end - self.started
             event.update(end_s=end - self.started, duration_ms=(end - start) * 1000,
@@ -228,12 +259,19 @@ class Simulator:
 
     def help(self, command):
         names = COMMANDS + (["aks skill list", "aks skill search", "aks skill show"] if self.skills else [])
+        if command.startswith("aks maintenanceconfiguration "):
+            return (f"Command: az {command}\nArguments: --resource-group -g; --cluster-name; --name -n; "
+                    "--schedule-type Weekly; --day-of-week; --interval-weeks; --duration (4-24 hours); "
+                    "--start-time HH:MM; --utc-offset +HH:MM; --start-date YYYY-MM-DD; --query; --output -o\n")
         if command in COMMANDS:
             return (f"Command: az {command}\nArguments: --resource-group -g; --name -n; "
                     "--cluster-name; --nodepool-name; --node-count; --kubernetes-version; "
                     "--enable-cluster-autoscaler; --disable-cluster-autoscaler; "
                     "--update-cluster-autoscaler; --min-count; --max-count; --control-plane-only; "
-                    "--no-wait; --yes; --query; --output {json,table,tsv,none}\n")
+                    "--no-wait; --yes; --query; --output {json,table,tsv,none}\n" +
+                    ("Automatic arguments: --sku {base,automatic}; --tier {free,standard,premium}; "
+                     "--enable-hosted-system; --node-provisioning-mode; --auto-upgrade-channel; "
+                     "--node-os-upgrade-channel\n" if command in ("aks create", "aks update") else ""))
         prefix = command + " " if command else ""
         return "Commands:\n" + "\n".join("  az " + c for c in names if c.startswith(prefix)) + "\n"
 
@@ -242,23 +280,49 @@ class Simulator:
             if key not in options:
                 raise CLIError("ArgumentError", f"required argument: {key}", 0, 2)
             return options[key]
+        if command in ("group show", "group exists"):
+            name = options.get("--name", options.get("--resource-group"))
+            if not name:
+                raise CLIError("ArgumentError", "required argument: --name", 0, 2)
+            group = next((g for g in self.state.get("resource_groups", []) if g["name"] == name), None)
+            if command == "group exists":
+                return group is not None
+            if not group:
+                raise CLIError("ResourceGroupNotFound", f"resource group '{name}' not found", 404)
+            return group
+        if command == "provider show":
+            namespace = need("--namespace")
+            if namespace not in ("Microsoft.ContainerService", "Microsoft.PolicyInsights"):
+                raise CLIError("MockNotImplemented", f"provider fixture not available for {namespace}", 0, 2)
+            return {"namespace": namespace, "registrationState": "Registered"}
         if command == "aks list":
             return [c for c in self.state["clusters"] if not options.get("--resource-group") or c["resourceGroup"] == options["--resource-group"]]
         if command == "aks get-versions":
             return {"values": [{"version": v, "isPreview": False} for v in self.state["upgrades"]]}
         nodepool = command.startswith("aks nodepool ")
+        maintenance = command.startswith("aks maintenanceconfiguration ")
         rg = need("--resource-group")
-        name = need("--cluster-name" if nodepool else "--name")
+        name = need("--cluster-name" if nodepool or maintenance else "--name")
         cluster = next((c for c in self.state["clusters"] if c["name"] == name and c["resourceGroup"] == rg), None)
         if command == "aks create":
             if cluster:
                 raise CLIError("Conflict", "cluster already exists", 409)
-            template = copy.deepcopy(self.scenario["initial_state"]["clusters"][0])
+            template = copy.deepcopy(self.scenario["cluster_template"] if "cluster_template" in self.scenario
+                                     else self.scenario["initial_state"]["clusters"][0])
             template.update(name=name, resourceGroup=rg, location=options.get("--location", "eastus"))
             template["id"] = f"/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/{rg}/providers/Microsoft.ContainerService/managedClusters/{name}"
             version = options.get("--kubernetes-version", template["kubernetesVersion"])
             template.update(kubernetesVersion=version, currentKubernetesVersion=version,
                             nodeResourceGroup=f"MC_{rg}_{name}_{template['location']}")
+            sku = options.get("--sku", "base").lower()
+            if sku not in ("base", "automatic"):
+                raise CLIError("InvalidParameter", "sku must be base or automatic")
+            if sku == "automatic":
+                self.validate_automatic_options(options)
+                template = automatic.automatic_defaults(template)
+                self.state["clusters"].append(template)
+                return template
+            template["sku"] = {"name": "Base", "tier": options.get("--tier", "free").title()}
             pool = template["agentPoolProfiles"][0]
             count = int(options.get("--node-count", 3))
             if count < 2:
@@ -282,6 +346,8 @@ class Simulator:
             raise CLIError("OperationNotAllowed", "another operation is in progress", 409)
         if mutation and action not in ("start", "delete") and cluster["powerState"]["code"] != "Running":
             raise CLIError("OperationNotAllowed", "start the stopped cluster before changing it", 409)
+        if maintenance:
+            return self.maintenance(cluster, action, options)
         if command == "aks delete":
             self.state["clusters"].remove(cluster)
             return None
@@ -306,7 +372,10 @@ class Simulator:
             if action == "add":
                 if target:
                     raise CLIError("Conflict", "node pool already exists", 409)
-                target = copy.deepcopy(cluster["agentPoolProfiles"][0])
+                templates = cluster["agentPoolProfiles"] or self.scenario.get("cluster_template", {}).get("agentPoolProfiles", [])
+                if not templates:
+                    raise CLIError("MockNotImplemented", "node pool creation needs a pool template", 0, 2)
+                target = copy.deepcopy(templates[0])
                 target.update(name=pool_name, mode=options.get("--mode", "User"), count=int(options.get("--node-count", 3)))
                 target.update(enableAutoScaling=False, minCount=None, maxCount=None)
                 if target["count"] < (2 if target["mode"] == "System" else 0):
@@ -330,6 +399,8 @@ class Simulator:
             target["powerState"]["code"] = "Running"
             return None
         if action == "stop":
+            if cluster.get("nodeProvisioningProfile", {}).get("mode") == "Auto":
+                raise CLIError("OperationNotAllowed", "stop is not supported with node auto-provisioning")
             if nodepool and target["mode"] == "System":
                 raise CLIError("OperationNotAllowed", "system node pools cannot be stopped")
             target["powerState"]["code"] = "Stopped"
@@ -343,6 +414,9 @@ class Simulator:
             target["count"] = count
         elif action == "update":
             if not nodepool:
+                if cluster.get("sku", {}).get("name") == "Automatic":
+                    self.validate_automatic_options(options)
+                    return cluster
                 target = cluster["agentPoolProfiles"][0]
             if options.get("--disable-cluster-autoscaler"):
                 target["enableAutoScaling"] = False
@@ -371,3 +445,67 @@ class Simulator:
                     for pool in cluster["agentPoolProfiles"]:
                         pool.update(orchestratorVersion=version, currentOrchestratorVersion=version)
         return target if nodepool else cluster
+
+    @staticmethod
+    def validate_automatic_options(options):
+        required = {"--sku": "automatic", "--tier": "standard", "--node-provisioning-mode": "auto",
+                    "--auto-upgrade-channel": "stable", "--node-os-upgrade-channel": "nodeimage",
+                    "--network-plugin": "azure", "--network-plugin-mode": "overlay", "--network-dataplane": "cilium",
+                    "--network-policy": "cilium", "--outbound-type": "managednatgateway"}
+        for key, expected in required.items():
+            if key in options and str(options[key]).lower() != expected:
+                if key == "--sku":
+                    raise CLIError("MockNotImplemented", "Automatic migration is outside this fixture", 0, 2)
+                raise CLIError("InvalidParameter", f"Automatic managed-network fixture requires {key} {expected}")
+        if any(key in options for key in ("--node-count", "--min-count", "--max-count", "--node-vm-size",
+                                           "--enable-cluster-autoscaler", "--disable-cluster-autoscaler",
+                                           "--update-cluster-autoscaler")):
+            raise CLIError("InvalidParameter", "use Automatic node provisioning rather than fixed pool capacity or cluster autoscaler settings")
+        if options.get("--enable-hosted-system", True) not in (True, "true"):
+            raise CLIError("InvalidParameter", "new Automatic clusters use managed system node pools")
+
+    @staticmethod
+    def maintenance(cluster, action, options):
+        configs = cluster.get("_maintenanceConfigurations", {})
+        if action == "list":
+            return [configs[name] for name in sorted(configs)]
+        name = options.get("--name")
+        if not name:
+            raise CLIError("ArgumentError", "required argument: --name", 0, 2)
+        if action == "show":
+            if name not in configs:
+                raise CLIError("ResourceNotFound", f"maintenance configuration '{name}' not found", 404)
+            return configs[name]
+        if action == "delete":
+            configs.pop(name, None)
+            return None
+        if action == "update" and name not in configs:
+            raise CLIError("ResourceNotFound", f"maintenance configuration '{name}' not found", 404)
+        if name not in ("default", automatic.AUTO_SCHEDULE, automatic.OS_SCHEDULE):
+            raise CLIError("InvalidParameter", "use default, aksManagedAutoUpgradeSchedule or aksManagedNodeOSUpgradeSchedule")
+        current = copy.deepcopy(configs.get(name, {"id": f"{cluster['id']}/maintenanceConfigurations/{name}",
+                                                  "name": name, "resourceGroup": cluster["resourceGroup"],
+                                                  "maintenanceWindow": {}}))
+        w = current["maintenanceWindow"]
+        weekly = w.get("schedule", {}).get("weekly", {})
+        if options.get("--schedule-type", "Weekly").lower() != "weekly":
+            raise CLIError("MockNotImplemented", "only weekly schedules are modeled", 0, 2)
+        day = options.get("--day-of-week", weekly.get("dayOfWeek", ""))
+        if day not in ("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"):
+            raise CLIError("InvalidParameter", "specify a valid --day-of-week")
+        interval = int(options.get("--interval-weeks", weekly.get("intervalWeeks", 1)))
+        duration = int(options.get("--duration", w.get("durationHours", 4)))
+        start = options.get("--start-time", w.get("startTime", ""))
+        offset = options.get("--utc-offset", w.get("utcOffset", "+00:00"))
+        if interval < 1 or not 4 <= duration <= 24 or not re.fullmatch(r"(?:[01]\d|2[0-3]):[0-5]\d", start):
+            raise CLIError("InvalidParameter", "use a positive weekly interval, 4-24 hour duration and HH:MM start time")
+        if not re.fullmatch(r"[+-](?:0\d|1[0-3]):[0-5]\d|[+-]14:00", offset):
+            raise CLIError("InvalidParameter", "invalid UTC offset")
+        w.update(schedule={"weekly": {"intervalWeeks": interval, "dayOfWeek": day}},
+                 durationHours=duration, startTime=start, utcOffset=offset)
+        if "--start-date" in options:
+            from datetime import date
+            date.fromisoformat(options["--start-date"])
+            w["startDate"] = options["--start-date"]
+        cluster.setdefault("_maintenanceConfigurations", {})[name] = current
+        return current

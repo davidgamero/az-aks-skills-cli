@@ -4,6 +4,8 @@
     {"id":"aks-fixed-capacity","title":"Set fixed node pool capacity","description":"Scale a pool to a fixed node count and handle autoscaler conflicts or throttling.","tags":["scale","nodes","capacity","autoscaler","throttling"],"path":"fixed-capacity.md"},
     {"id":"aks-autoscaler","title":"Configure autoscaler bounds","description":"Enable or update autoscaling for an individual node pool.","tags":["autoscaling","autoscaler","minimum","maximum","bounds"],"path":"autoscaler.md"},
     {"id":"aks-control-plane-upgrade","title":"Upgrade only the control plane","description":"Find a supported Kubernetes upgrade and preserve node pool versions.","tags":["upgrade","version","control","plane"],"path":"control-plane-upgrade.md"},
-    {"id":"aks-stop-start","title":"Stop or start a development cluster","description":"Change cluster power state while preserving configuration.","tags":["stop","start","cost","development","power"],"path":"stop-start.md"}
+    {"id":"aks-stop-start","title":"Stop or start a development cluster","description":"Change cluster power state while preserving configuration.","tags":["stop","start","cost","development","power"],"path":"stop-start.md"},
+    {"id":"aks-automatic-create","title":"Create an AKS Automatic cluster","description":"Select the Automatic SKU with managed networking, system pools and upgrade defaults.","tags":["automatic","create","sku","hosted","provisioning"],"path":"automatic-create.md"},
+    {"id":"aks-automatic-maintenance","title":"Schedule AKS Automatic maintenance","description":"Configure separate Kubernetes and node image upgrade windows without changing Automatic channels.","tags":["automatic","maintenance","schedule","upgrade","image","window"],"path":"automatic-maintenance.md"}
   ]
 }

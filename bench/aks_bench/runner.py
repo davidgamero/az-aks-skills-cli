@@ -18,6 +18,7 @@ from urllib.parse import urlparse
 from .mock import ROOT, Simulator, SEMANTIC, COMMANDS
 from .scenarios import NAMES, make, grade
 from .services import Services
+from . import automatic
 
 COPILOT_HOSTS = {"api.github.com", "api.githubcopilot.com", "api.individual.githubcopilot.com",
                  "api.business.githubcopilot.com", "api.enterprise.githubcopilot.com",
@@ -127,6 +128,8 @@ def telemetry(path):
 
 
 def oracle_commands(scenario):
+    if scenario["name"] in automatic.NAMES:
+        return automatic.oracle_commands(scenario)
     c = scenario["state"]["clusters"][0]
     base = ["-g", c["resourceGroup"], "--cluster-name", c["name"], "-n", "apps"]
     cluster = ["-g", c["resourceGroup"], "-n", c["name"]]

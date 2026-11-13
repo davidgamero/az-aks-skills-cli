@@ -2,6 +2,9 @@
 
 See [the initial GPT-6.1 Sol pilot](benchmark-pilot.md) for measured results from
 14 live, isolated trials.
+The [help-change rerun](benchmark-help-evaluation.md) records 14 further trials
+and the exact original tasks. [AKS Automatic research and scenarios](aks-automatic-scenarios.md)
+describe the two additional Automatic tasks.
 
 ## Question and experimental unit
 
@@ -37,7 +40,8 @@ sources of variance; fresh sessions do not disable provider-side prompt caching.
 ## Research-derived scenarios
 
 These are representative documented operational workflows, not a frequency-ranked
-list of the most common AKS tickets. Sources were retrieved on November 12, 2026.
+list of the most common AKS tickets. Original sources were retrieved on November
+12, 2026; Automatic sources were researched on November 13.
 
 | Scenario | Natural task | State oracle | Source |
 |---|---|---|---|
@@ -46,6 +50,8 @@ list of the most common AKS tickets. Sources were retrieved on November 12, 2026
 | `control-plane-upgrade` | Upgrade only the control plane | Requested supported version; all pool versions unchanged | [Upgrade the control plane](https://learn.microsoft.com/en-us/azure/aks/upgrade-aks-control-plane) |
 | `stop-dev` | Stop an idle dev cluster while preserving configuration | Stopped, succeeded, same pools and configuration | [Stop/start clusters](https://learn.microsoft.com/en-us/azure/aks/start-stop-cluster) |
 | `transient-scale` | Fixed-size scaling with a transient service failure | Scaling oracle plus a deterministic first-call 429 | Scaling task above; injected failure is a synthetic robustness test |
+| `automatic-create` | Create Automatic with managed networking and managed system pools | Automatic/Standard SKU-tier, Auto provisioning, stable/NodeImage, correct network defaults and verification | [Automatic quickstart](https://learn.microsoft.com/en-us/azure/aks/automatic/quick-automatic-managed-network) |
+| `automatic-maintenance` | Reschedule Kubernetes and node-image auto-upgrades independently | Two correct weekly windows; default window and cluster unchanged; both schedules observed | [Planned maintenance](https://learn.microsoft.com/en-us/azure/aks/planned-maintenance) |
 
 Important semantics captured from those sources: manual scaling conflicts with
 an enabled autoscaler; `--control-plane-only` preserves pool versions; node pools
@@ -122,9 +128,11 @@ installed Azure CLI 2.86.0 ACS module. It excludes extensions such as aks-previe
 and aks-agent. `bench/capture_commands.py` refreshes this snapshot offline using
 Azure CLI's own Python; it never runs a resource operation.
 
-The simulator currently has stateful handlers for **23 commands**: cluster
+The simulator currently has stateful handlers for **28 AKS commands**: cluster
 list/show/create/delete/update/scale/start/stop/upgrade/version discovery/wait,
-and the analogous supported nodepool operations. Handlers implement the options
+and the analogous supported nodepool operations, plus maintenanceconfiguration
+list/show/add/update/delete. Three auxiliary inspection commands (`group show`,
+`group exists`, `provider show`) have fixtures. Handlers implement the options
 needed for these workflows, not Azure's entire validation/defaulting/API contract.
 For example, there is no real scheduler, VM provisioning, admission controller,
 PDB drain model, auth system, quota service or regional capacity simulation.
