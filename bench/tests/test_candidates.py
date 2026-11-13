@@ -215,3 +215,5 @@ class CandidateTests(unittest.TestCase):
         url = "https://management.azure.com"+sim.scenario["context"]["approved_namespace_scope"]+"?api-version=2025-07-01"
         self.assertEqual(sim.call(["rest", "--method", "get", "--url", url])["exit_code"], 0)
         self.assertEqual(sim.call(["rest", "--method", "put", "--url", url])["exit_code"], 2)
+        self.assertEqual(sim.call(["rest", "--method", "get", "--url", url.replace("/subscriptions/", "/subscriptions/wrong-")])["exit_code"], 1)
+        self.assertNotEqual(sim.events[-1]["category"], "coverage_gap")

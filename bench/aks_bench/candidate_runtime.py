@@ -601,8 +601,10 @@ class World:
         if command == "rest":
             parsed = urlparse(o.get("--url", ""))
             namespace = w["managed_namespaces"].get("retail")
-            if o.get("--method", "get").lower() != "get" or parsed.hostname != "management.azure.com" or not namespace or parsed.path != namespace["id"]:
+            if o.get("--method", "get").lower() != "get" or parsed.hostname != "management.azure.com" or "/managedNamespaces/" not in parsed.path:
                 raise WorldError("MockNotImplemented", "REST operation outside bounded read-only resource model", 0, 2)
+            if not namespace or parsed.path != namespace["id"]:
+                raise WorldError("ResourceNotFound", "managed namespace resource ID not found", 404)
             return {"id": namespace["id"], "name": namespace["name"], "type": "Microsoft.ContainerService/managedClusters/managedNamespaces", "properties": {k:v for k,v in namespace.items() if k not in ("id", "name", "location", "resourceGroup")}}, ["managed_namespace"]
         if command == "network dns zone list": return [], []
         if command.startswith("network dns record-set "):
