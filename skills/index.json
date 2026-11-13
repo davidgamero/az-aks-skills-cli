@@ -2,6 +2,27 @@
   "version": 1,
   "skills": [
     {
+      "id": "aks-acr-image-pull",
+      "title": "Repair an ACR image-pull failure",
+      "description": "Separate registry authorization, ABAC, image and network causes before making one targeted repair.",
+      "tags": ["acr", "imagepullbackoff", "errimagepull", "abac", "registry", "authentication"],
+      "path": "aks-acr-image-pull/SKILL.md"
+    },
+    {
+      "id": "aks-workload-identity",
+      "title": "Configure or repair workload identity",
+      "description": "Connect a service account to an Azure identity and verify application access to the intended resource.",
+      "tags": ["workload", "identity", "oidc", "federation", "serviceaccount", "keyvault", "automatic"],
+      "path": "aks-workload-identity/SKILL.md"
+    },
+    {
+      "id": "aks-pdb-upgrade",
+      "title": "Recover an upgrade blocked by a PDB",
+      "description": "Restore an allowed disruption while preserving the workload availability requirement, then retry the upgrade.",
+      "tags": ["pdb", "upgrade", "drain", "eviction", "availability", "upgradefailed"],
+      "path": "aks-pdb-upgrade/SKILL.md"
+    },
+    {
       "id": "aks-upgrade",
       "title": "Plan an AKS upgrade",
       "description": "Inspect available Kubernetes versions and prepare an upgrade plan.",

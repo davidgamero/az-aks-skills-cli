@@ -47,7 +47,8 @@ class ShimTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         rows = json.loads(result.stdout)
         self.assertEqual([row["id"] for row in rows], [
-            "aks-node-pools", "aks-pod-troubleshooting", "aks-upgrade",
+            "aks-acr-image-pull", "aks-node-pools", "aks-pdb-upgrade", "aks-pod-troubleshooting",
+            "aks-upgrade", "aks-workload-identity",
         ])
         self.assertEqual(set(rows[0]), {"id", "title", "description", "tags"})
         self.assertEqual(result.stderr, "")

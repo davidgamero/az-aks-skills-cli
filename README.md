@@ -154,3 +154,19 @@ upgrade, Automatic registration and managed-namespace quota failures, plus logge
 Microsoft Learn access for both arms. Use `--docs-mode off` for an offline comparison.
 The [discovery-only troubleshooting pilot](docs/troubleshooting-pilot.md) records
 valid matched pairs and the observed help-to-skill discovery path.
+
+## Task-focused skill design
+
+The [skill coverage and tuning guide](docs/skill-catalog-tuning.md) explains the
+nine benchmark skills and the original-versus-revised content comparison.
+To inspect that catalog directly:
+
+```sh
+AZ_AKS_SKILLS_DIR="$PWD/bench/skills" ./bin/az aks skill list
+```
+
+The standalone catalog also includes new skills for **ACR image pulls**,
+**workload identity**, and **PDB-blocked upgrades**. Their
+[Microsoft Learn research and scenario designs](docs/typical-aks-task-designs.md)
+specify success paths, failure branches, invariants and required simulator state.
+These three new workflows are designed but not yet modeled in the benchmark.

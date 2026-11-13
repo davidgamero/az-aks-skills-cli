@@ -1,5 +1,77 @@
 # Skill content tuning experiment
 
+## Pilot result
+
+The 30-run comparison completed using `gpt-6.1-sol`, Copilot CLI 1.0.98 and
+the frozen harness at `63a7f98`. All 30 runs reached the requested state; **29
+were valid**. One no-skills provider-recovery run queried Microsoft.Network,
+which the provider fixture did not model. That trial is excluded, not counted as
+a model failure or silently treated as a successful performance sample.
+
+All 20 original/revised catalog trials were valid. Prompts and complete scenario
+fixtures were verified identical within each of the ten three-condition blocks.
+Index metadata was byte-identical between catalogs: only Markdown bodies changed.
+
+| Scenario | Median seconds, no skills | Original | Revised | Skill adoption original / revised |
+|---|---:|---:|---:|---:|
+| Fixed-size pool | 12.71 | 12.34 | 12.56 | 0/2 / 0/2 |
+| Automatic creation | 18.31 | 17.20 | 19.44 | 0/2 / 0/2 |
+| Automatic maintenance | 19.39 | 17.25 | 18.33 | 0/2 / 0/2 |
+| Provider recovery | 25.06* | 28.12 | 23.86 | 2/2 / 1/2 |
+| Managed quota recovery | 17.01 | 19.26 | 18.28 | 0/2 / 0/2 |
+
+\* The no-skills provider value is the sole valid seed-2 run; other cells are
+medians of two successful valid runs. Use matched deltas rather than treating
+that value as a two-seed control.
+
+Most agents never retrieved a skill. **No performance difference in those runs
+can be credited to the revised document bodies.** Adoption was 2/10 with original
+content and 1/10 with revised content. Since metadata/help were unchanged, the
+different first-read choices are not evidence of improved discovery from body edits.
+There were no observed curl or native-web documentation lookups in this pilot.
+
+### The one pair where both agents read skills
+
+Provider recovery, seed 2:
+
+| Metric | No skills | Original | Revised |
+|---|---:|---:|---:|
+| Full elapsed time | 25.06s | 27.67s | 23.61s |
+| Time to verified goal | 22.20s | 23.80s | 19.74s |
+| Modeled Azure requests | 11 | 11 | 10 |
+| Model inference spans | 6 | 7 | 7 |
+| Skill documents read | 0 | 2 | 2 |
+
+The revised run was 4.06 seconds faster than original (about 14.7%) and 1.45
+seconds faster than the no-skills run. The trace shows one intended behavior:
+after reading, it ran create with `-o none` and final show together using `&&`.
+The original used separate tool calls for creation and verification.
+
+This remains a **single promising observation**, not a causal or statistically
+reliable speedup. Some timing differences already existed before skill reading.
+The original's extra deployment-history request also happened before reading,
+so its API-count difference cannot be attributed to the new body text. Both
+agents still read two documents: the self-contained recovery recipe did not
+eliminate that second read in this run.
+
+### Evidence
+
+Raw artifacts and frozen inputs are local and gitignored at
+`benchmark-results/catalog-tuning-20261113/`. The experiment has one revision of
+the harness, seeded interleaving, identical prompts/state, and these catalog hashes:
+
+- Original: `a6841e0abe6582457e79d26a70f9635b813a4f290ee00648dc53c165aa3f1bdc`
+- Revised: `036eb6a03ef4acf9e67f479efc402b3635a63ace3fd3a90170026f963480eaea`
+
+The summary retains the invalid baseline run and reports successful matched
+deltas. The new ACR/workload-identity/PDB recipes were added to the separate
+standalone catalog after this experiment started; they are not part of either
+frozen experimental catalog. See [their research and scenario designs](typical-aks-task-designs.md).
+
+**Conclusion:** retain the concise operational structure and test it further,
+but there is no demonstrated broad success-path speedup yet. Help-based
+discovery/adoption remains the main limitation on measuring the content effect.
+
 ## What each benchmark skill covers
 
 | Skill ID | Task | Successful endpoint |
