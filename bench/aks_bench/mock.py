@@ -30,13 +30,15 @@ SEMANTIC = {
     "aks maintenanceconfiguration add", "aks maintenanceconfiguration update",
     "aks maintenanceconfiguration delete", "aks maintenanceconfiguration list", "aks maintenanceconfiguration show",
     "aks namespace list", "aks namespace show", "aks namespace update",
+    "aks get-credentials",
 }
-AUXILIARY = {"group show", "group exists", "provider show", "provider list", "provider register"}
+AUXILIARY = {"group show", "group exists", "provider show", "provider list", "provider register",
+             "monitor activity-log list", "deployment group list", "aks operation show-latest"}
 ALIASES = {"-g": "--resource-group", "-n": "--name", "-o": "--output", "-l": "--location", "-y": "--yes", "-h": "--help", "-k": "--kubernetes-version"}
 FLAGS = {"--yes", "--help", "--version", "--debug", "--verbose", "--only-show-errors", "--no-wait",
          "--control-plane-only", "--enable-cluster-autoscaler", "--disable-cluster-autoscaler",
          "--update-cluster-autoscaler", "--generate-ssh-keys", "--updated", "--created", "--deleted", "--exists",
-         "--enable-hosted-system", "--enable-managed-identity", "--wait"}
+         "--enable-hosted-system", "--enable-managed-identity", "--wait", "--overwrite-existing", "--admin"}
 VALUES = {"--resource-group", "--name", "--cluster-name", "--nodepool-name", "--node-count", "--min-count",
           "--max-count", "--kubernetes-version", "--output", "--query", "--subscription", "--location",
           "--mode", "--node-vm-size", "--interval", "--timeout", "--custom", "--sku", "--tier",
@@ -44,7 +46,7 @@ VALUES = {"--resource-group", "--name", "--cluster-name", "--nodepool-name", "--
           "--network-plugin", "--network-plugin-mode", "--network-dataplane", "--network-policy", "--outbound-type",
           "--schedule-type", "--day-of-week", "--interval-weeks", "--duration", "--start-time", "--utc-offset",
           "--start-date", "--namespace", "--cpu-request", "--cpu-limit", "--memory-request", "--memory-limit",
-          "--ingress-policy", "--egress-policy"}
+          "--ingress-policy", "--egress-policy", "--file", "--offset", "--status", "--max-events", "--resource-id", "--end-time"}
 
 
 class CLIError(Exception):
@@ -225,6 +227,12 @@ class Simulator:
                         else:
                             time.sleep(delay)
                     response["stdout"] = render(value, opts)
+                    if command == "aks get-credentials" and isinstance(value, str):
+                        if opts.get("--file") == "-":
+                            response["stdout"] = value
+                        else:
+                            response["stdout"] = ""
+                            response["kubeconfig"] = value
             except CLIError as error:
                 self.state["clusters"] = snapshot
                 self.state["pending"] = pending_snapshot
@@ -300,6 +308,8 @@ class Simulator:
                         raise CLIError("MockNotImplemented", "no Kubernetes fixture is available", 0, 2)
                     event["modeled_kubernetes_requests"] = 1
                     response["stdout"], verified = troubleshooting.kubectl(self.state["clusters"][0], argv, CLIError)
+                    if argv[:2] == ["config", "current-context"] or "--help" in argv:
+                        event.update(category="local", modeled_kubernetes_requests=0)
                 else:
                     raise ValueError("unsupported benchmark tool")
             except CLIError as error:
@@ -374,6 +384,8 @@ class Simulator:
             if key not in options:
                 raise CLIError("ArgumentError", f"required argument: {key}", 0, 2)
             return options[key]
+        if command in ("monitor activity-log list", "deployment group list", "aks operation show-latest"):
+            return troubleshooting.diagnostics(self.scenario, self.state, self.events, command, options, CLIError)
         if command in ("group show", "group exists"):
             name = options.get("--name", options.get("--resource-group"))
             if not name:
@@ -458,6 +470,8 @@ class Simulator:
             return None
         if command in ("aks show", "aks nodepool list"):
             return cluster["agentPoolProfiles"] if nodepool else cluster
+        if command == "aks get-credentials":
+            return troubleshooting.kubeconfig(cluster)
         if action == "wait":
             if self.state["pending"]:
                 timeout = float(options.get("--timeout", 30))

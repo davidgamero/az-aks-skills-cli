@@ -63,6 +63,33 @@ Sources:
 
 ## Three runnable fault scenarios
 
+### First live diagnostic sweep and coverage fixes
+
+The first six discovery-only trials on `f82fca3` all reached their requested final
+state, but **all six were excluded from performance analysis** because agents
+used legitimate diagnostic commands missing from the initial simulator:
+
+- Azure activity logs and ARM deployment history.
+- Kubeconfig/context and node inspection.
+- Managed network-policy reads and combined resourcequota/limitrange/pod queries.
+
+These are now modeled. Prior failures are visible in activity logs; direct AKS
+SDK operations correctly produce no ARM template deployment history. Credential
+retrieval writes a synthetic kubeconfig inside the container only. The installed
+CLI's `aks operation show-latest` is also covered. The nonexistent
+`aks nodepool operation show-latest` remains a normal CLI error.
+
+Replaying all six recorded command sequences against the fixes produced no
+coverage gaps and preserved correct final state. This validates coverage, not
+agent performance; fresh live trials are needed for timings.
+
+The invalidated sweep nevertheless recorded a discovery capability: agents in
+the version-skew and provider-registration treatment runs found and read skills
+through help, without a prompt hint. No agent made a logged documentation HTTP
+request. Raw diagnostic artifacts remain in
+`benchmark-results/sol-troubleshooting-discovery-20261113/` and are not pooled
+into valid benchmark comparisons.
+
 ### `debug-version-skew`
 
 **Task:** A previous apps-pool upgrade failed. Finish upgrading it to 1.34.2;

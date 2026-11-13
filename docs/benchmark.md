@@ -138,13 +138,16 @@ installed Azure CLI 2.86.0 ACS module. It excludes extensions such as aks-previe
 and aks-agent. `bench/capture_commands.py` refreshes this snapshot offline using
 Azure CLI's own Python; it never runs a resource operation.
 
-The simulator currently has stateful handlers for **31 AKS commands**: cluster
+The simulator currently has stateful handlers for **32 core AKS commands**: cluster
 list/show/create/delete/update/scale/start/stop/upgrade/version discovery/wait,
 and the analogous supported nodepool operations, plus maintenanceconfiguration
-list/show/add/update/delete and namespace list/show/update. Five auxiliary commands
-(`group show`, `group exists`, `provider show/list/register`) have fixtures.
-A bounded fake kubectl models deployment status, quota/events inspection, managed
-field rejection, scaling and rollout verification for the quota scenario.
+list/show/add/update/delete, namespace list/show/update, and get-credentials.
+Eight auxiliary commands have fixtures: group show/exists, provider show/list/register,
+monitor activity-log list, deployment group list, and the extension's
+`aks operation show-latest`. A bounded fake kubectl models context/node inspection,
+deployment status, quota/events/policy inspection, combined get queries, managed
+field rejection, scaling and rollout verification. Kubeconfig is written only
+inside the container home or `/work`, with a nonfunctional loopback endpoint.
 Handlers implement the options
 needed for these workflows, not Azure's entire validation/defaulting/API contract.
 For example, there is no real scheduler, VM provisioning, admission controller,

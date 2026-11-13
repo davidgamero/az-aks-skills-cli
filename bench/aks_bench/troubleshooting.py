@@ -3,6 +3,7 @@
 import copy
 from decimal import Decimal, InvalidOperation
 import json
+from datetime import datetime, timedelta, timezone
 
 from . import automatic
 from .documentation import VERSION_URL, PROVIDER_URL, NAMESPACE_URL, NAMESPACE_CONCEPTS_URL
@@ -131,8 +132,8 @@ def namespace_command(cluster, action, options, error):
 def kubectl(cluster, argv, error):
     if "--help" in argv or "-h" in argv or not argv:
         return "kubectl get/describe deployment|pods|events|resourcequota|namespace -n NAMESPACE; rollout status deployment/NAME; scale deployment NAME --replicas N\n", False
-    if "_workload" not in cluster:
-        raise error("MockNotImplemented", "Kubernetes state is not modeled for this scenario", 0, 2)
+    if argv[:2] == ["config", "current-context"]:
+        return cluster["name"] + "\n", False
     # Kubernetes -n is namespace, unlike az -n (resource name).
     words, opts = [], {}
     i = 0
@@ -150,10 +151,28 @@ def kubectl(cluster, argv, error):
         else:
             words.extend(arg.split("/", 1))
         i += 1
-    if opts.get("--namespace", "default") != "retail":
-        raise error("NotFound", "use the workload namespace retail", 404)
     action = words[0]
     resource = words[1] if len(words) > 1 else ""
+    if action == "get" and "," in resource:
+        items, verified = [], False
+        index = argv.index(resource)
+        for kind in resource.split(","):
+            text, read = kubectl(cluster, [*argv[:index], kind, *argv[index + 1:]], error)
+            data = json.loads(text)
+            items.extend(data["items"] if "items" in data else [data])
+            verified = verified or read
+        return json.dumps({"apiVersion": "v1", "kind": "List", "items": items}, indent=2) + "\n", verified
+    if action in ("get", "describe") and resource in ("node", "nodes"):
+        nodes = []
+        for pool in cluster["agentPoolProfiles"]:
+            for index in range(pool["count"]):
+                nodes.append({"apiVersion": "v1", "kind": "Node", "metadata": {"name": f"aks-{pool['name']}-{index}", "labels": {"agentpool": pool["name"]}},
+                              "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v" + pool["orchestratorVersion"]}}})
+        return json.dumps({"kind": "List", "items": nodes}, indent=2) + "\n", True
+    if "_workload" not in cluster:
+        raise error("MockNotImplemented", "Kubernetes workload state is not modeled for this scenario", 0, 2)
+    if opts.get("--namespace", "default") != "retail":
+        raise error("NotFound", "use the workload namespace retail", 404)
     if action in ("patch", "edit", "delete", "apply", "replace"):
         if resource in ("resourcequota", "resourcequotas", "quota", "namespace", "namespaces", "ns"):
             raise error("Forbidden", "managed namespace fields and quota are reconciled by ARM; Kubernetes API edits are blocked. " + NAMESPACE_URL, 403)
@@ -191,10 +210,70 @@ def kubectl(cluster, argv, error):
     elif resource in ("ns", "namespace", "namespaces"):
         data = {"metadata": {"name": "retail", "labels": {"ManagedByARM": "true"}}}
         verify = False
+    elif resource in ("limitrange", "limitranges", "limits"):
+        data, verify = {"kind": "List", "items": []}, False
+    elif resource in ("networkpolicy", "networkpolicies", "netpol"):
+        policies = []
+        settings = cluster["_managedNamespaces"]["retail"]["defaultNetworkPolicy"]
+        for direction in ("ingress", "egress"):
+            mode = settings[direction]
+            rules = [] if mode == "DenyAll" else [{}] if mode == "AllowAll" else [{"from" if direction == "ingress" else "to": [{"podSelector": {}}]}]
+            policies.append({"apiVersion": "networking.k8s.io/v1", "kind": "NetworkPolicy",
+                             "metadata": {"name": f"managed-{direction}", "namespace": "retail"},
+                             "spec": {"podSelector": {}, "policyTypes": [direction.title()], direction: rules}})
+        data, verify = {"kind": "List", "items": policies}, False
     else:
         raise error("MockNotImplemented", "Kubernetes resource outside the modeled subset", 0, 2)
     # JSON is also valid YAML, allowing common -o yaml inspection without a YAML dependency.
     return json.dumps(data, indent=2) + "\n", verify
+
+
+def kubeconfig(cluster):
+    # A deliberately unusable real endpoint; the mock kubectl uses host-owned state.
+    name = cluster["name"]
+    return json.dumps({"apiVersion": "v1", "kind": "Config", "current-context": name,
+                       "clusters": [{"name": name, "cluster": {"server": "https://127.0.0.1:9"}}],
+                       "contexts": [{"name": name, "context": {"cluster": name, "user": "benchmark"}}],
+                       "users": [{"name": "benchmark", "user": {}}]}, indent=2) + "\n"
+
+
+def diagnostics(scenario, state, events, command, options, error):
+    cluster = scenario.get("cluster_template") or scenario["initial_state"]["clusters"][0]
+    if options.get("--resource-group", cluster["resourceGroup"]) != cluster["resourceGroup"]:
+        return []
+    if command == "deployment group list":
+        # Direct az aks SDK operations do not create an ARM template deployment.
+        return []
+    if scenario["name"] == "debug-version-skew":
+        failure = {"code": "NodePoolMcVersionIncompatible", "message": "Requested pool version 1.34.2 is greater than control plane 1.33.5. " + VERSION_URL}
+        operation = "Microsoft.ContainerService/managedClusters/agentPools/write"
+        resource_id = cluster["id"] + "/agentPools/apps"
+    elif scenario["name"] == "debug-automatic-provider":
+        failure = {"code": "MissingSubscriptionRegistration", "message": "The subscription is not registered to use namespace Microsoft.PolicyInsights. " + PROVIDER_URL}
+        operation = "Microsoft.ContainerService/managedClusters/write"
+        resource_id = cluster["id"]
+    else:
+        if command == "monitor activity-log list":
+            return []
+        raise error("MockNotImplemented", "operation history is not available for this scenario", 0, 2)
+    if command == "aks operation show-latest":
+        if options.get("--name") != cluster["name"] or not any(c["id"] == cluster["id"] for c in state["clusters"]):
+            raise error("ResourceNotFound", "managed cluster not found", 404)
+        mutations = {"aks create", "aks update", "aks upgrade", "aks nodepool upgrade"}
+        recent = next((e for e in reversed(events) if e["command"] in mutations and e["category"] == "azure"), None)
+        succeeded = recent is not None and recent["exit_code"] == 0
+        return {"id": cluster["id"] + "/operations/benchmark", "status": "Succeeded" if succeeded else "Failed", "error": None if succeeded else failure}
+    if options.get("--status", "Failed").lower() != "failed":
+        return []
+    if options.get("--resource-id") and not resource_id.startswith(options["--resource-id"]):
+        return []
+    record = {"eventTimestamp": (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),
+              "resourceId": resource_id, "resourceGroupName": cluster["resourceGroup"],
+              "operationName": {"value": operation, "localizedValue": operation},
+              "status": {"value": "Failed", "localizedValue": "Failed"},
+              "subStatus": {"value": "BadRequest", "localizedValue": "Bad Request"},
+              "properties": {"statusMessage": json.dumps({"status": "Failed", "error": failure})}}
+    return [record][:int(options.get("--max-events", 1))]
 
 
 def oracle_commands(scenario):

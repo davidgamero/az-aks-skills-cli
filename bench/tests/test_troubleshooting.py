@@ -2,6 +2,7 @@ import copy
 import json
 from pathlib import Path
 import tempfile
+import importlib.util
 import unittest
 from unittest.mock import patch, MagicMock
 from urllib.error import HTTPError
@@ -13,6 +14,55 @@ from aks_bench.scenarios import make, grade
 
 
 class FaultTests(unittest.TestCase):
+    def test_activity_log_exposes_prior_failure_without_mutating_state(self):
+        for scenario_name, code in (("debug-version-skew", "NodePoolMcVersionIncompatible"),
+                                    ("debug-automatic-provider", "MissingSubscriptionRegistration")):
+            scenario = make(scenario_name, 1)
+            sim = Simulator(scenario, latency_scale=0)
+            before = copy.deepcopy(sim.state["clusters"])
+            result = sim.call(["monitor", "activity-log", "list", "--resource-group", "rg-dev-3201",
+                               "--offset", "7d", "--status", "Failed", "--max-events", "30"])
+            self.assertEqual(result["exit_code"], 0, result)
+            record = json.loads(result["stdout"])[0]
+            self.assertEqual(json.loads(record["properties"]["statusMessage"])["error"]["code"], code)
+            self.assertEqual(sim.state["clusters"], before)
+            result = sim.call(["deployment", "group", "list", "-g", "rg-dev-3201"])
+            self.assertEqual(json.loads(result["stdout"]), [])
+
+    def test_credentials_context_nodes_and_latest_operation(self):
+        scenario = make("debug-version-skew", 1)
+        sim = Simulator(scenario, latency_scale=0)
+        base = ["-g", "rg-dev-3201", "-n", "aks-dev-3201"]
+        result = sim.call(["aks", "get-credentials", *base, "--file", "/work/test-kubeconfig"])
+        self.assertEqual(result["exit_code"], 0, result)
+        config = json.loads(result["kubeconfig"])
+        self.assertEqual(config["clusters"][0]["cluster"]["server"], "https://127.0.0.1:9")
+        self.assertEqual(sim.call(["config", "current-context"], tool="kubectl")["stdout"].strip(), "aks-dev-3201")
+        nodes = sim.call(["get", "nodes", "-o", "wide"], tool="kubectl")
+        self.assertEqual(len(json.loads(nodes["stdout"])["items"]), 5)
+        operation = sim.call(["aks", "operation", "show-latest", *base])
+        self.assertEqual(json.loads(operation["stdout"])["error"]["code"], "NodePoolMcVersionIncompatible")
+
+    def test_namespace_policy_and_combined_reads(self):
+        sim = Simulator(make("debug-managed-namespace-quota", 1), latency_scale=0)
+        policy = sim.call(["-n", "retail", "get", "networkpolicy", "-o", "yaml"], tool="kubectl")
+        self.assertEqual(policy["exit_code"], 0, policy)
+        self.assertEqual(len(json.loads(policy["stdout"])["items"]), 2)
+        combined = sim.call(["get", "resourcequota,limitrange,pods", "-n", "retail", "-o", "wide"], tool="kubectl")
+        self.assertEqual(combined["exit_code"], 0, combined)
+        self.assertEqual(len(json.loads(combined["stdout"])["items"]), 3)
+
+    def test_kubeconfig_file_written_only_inside_container_roots(self):
+        path = Path(__file__).resolve().parents[1] / "container" / "client.py"
+        spec = importlib.util.spec_from_file_location("benchmark_container_client", path)
+        client = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(client)
+        with tempfile.TemporaryDirectory() as directory, patch.object(client.Path, "home", return_value=Path(directory)):
+            client.write_kubeconfig("fixture", [])
+            self.assertEqual((Path(directory) / ".kube/config").read_text(), "fixture")
+            with self.assertRaises(ValueError):
+                client.write_kubeconfig("fixture", ["--file", "/run/bench/az.sock"])
+
     def test_registration_fault_persists_until_provider_is_registered(self):
         scenario = make("debug-automatic-provider", 1)
         sim = Simulator(scenario, latency_scale=0)
