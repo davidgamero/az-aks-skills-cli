@@ -45,6 +45,7 @@ def make(name, seed, base):
     developer = f"00000000-0000-0000-0000-{int(suffix):012d}"
     image = f"registry{suffix}.azurecr.io/team/api:v2"
     c.update(sku={"name": "Base", "tier": "Standard"},
+             enableRbac=True, aadProfile={"managed": True, "enableAzureRbac": True},
              identityProfile={"kubeletidentity": {"objectId": "kubelet-principal", "clientId": "kubelet-client"}},
              oidcIssuerProfile={"enabled": True, "issuerUrl": f"https://eastus.oic.prod-aks.azure.com/tenant/{suffix}/"},
              securityProfile={"workloadIdentity": {"enabled": True}},

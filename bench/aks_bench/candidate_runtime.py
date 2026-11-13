@@ -356,6 +356,13 @@ class World:
                 probe = obj("Pod", name, ns, {"containers": [{"name": "probe", "image": "curlimages/curl:8.10.1"}]}, status={"phase": "Running"})
                 probe["metadata"]["labels"] = {"app": "ingress" if ns == "ingress" else "probe"}
                 put(w, probe)
+        for resource in list(w["resources"].values()):
+            if resource["kind"] != "Pod" or re.fullmatch(r"api-\d+", resource["metadata"]["name"]): continue
+            containers = resource.get("spec", {}).get("containers", [])
+            if containers and containers[0].get("image", "").startswith(w["registry"]["loginServer"]+"/"):
+                pulled = containers[0]["image"] == self.context["approved_image"] and self.pull_ok()
+                resource["status"] = {"phase": "Running" if pulled else "Pending", "conditions": [{"type": "Ready", "status": "True" if pulled else "False"}],
+                    "containerStatuses": [{"name": containers[0]["name"], "ready": pulled, "image": containers[0]["image"], "imageID": "sha256:intended-image" if pulled else "", "state": {"running": {}} if pulled else {"waiting": {"reason": "ImagePullBackOff"}}}]}
         quota_resource = self.get("resourcequota", "managed-quota")
         if quota_resource:
             quota_resource["status"] = {"hard": copy.deepcopy(quota_resource["spec"]["hard"]),
@@ -543,6 +550,7 @@ class World:
         if command == "role definition list":
             return [{"roleName": name, "name": name} for name in ("AcrPull", "Container Registry Repository Reader", "Azure Kubernetes Service RBAC Reader", "Key Vault Secrets User")], []
         if command in ("acr show", "acr list"):
+            if o.get("--ids", w["registry"]["id"]) != w["registry"]["id"]: raise WorldError("ResourceNotFound", "registry not found", 404)
             return ([w["registry"]] if command.endswith("list") else w["registry"]), ["registry"]
         if command == "acr check-health":
             return {"loginEndpoint": "reachable", "dataEndpoint": "reachable" if w["nsg"]["securityRules"][0]["access"] == "Allow" else "TCP 443 timed out", "privateAddress": "10.0.2.5"}, []
@@ -587,6 +595,15 @@ class World:
             return ([row] if command.endswith("list") else row), []
         if command in ("network private-endpoint list", "resource list"):
             return [w["private_endpoint"]] if o.get("--resource-group", "network-rg") == "network-rg" else [], []
+        if command == "network private-endpoint show":
+            if o.get("--name") != w["private_endpoint"]["name"] or o.get("--resource-group") != "network-rg": raise WorldError("ResourceNotFound", "private endpoint not found", 404)
+            return w["private_endpoint"], []
+        if command == "rest":
+            parsed = urlparse(o.get("--url", ""))
+            namespace = w["managed_namespaces"].get("retail")
+            if o.get("--method", "get").lower() != "get" or parsed.hostname != "management.azure.com" or not namespace or parsed.path != namespace["id"]:
+                raise WorldError("MockNotImplemented", "REST operation outside bounded read-only resource model", 0, 2)
+            return {"id": namespace["id"], "name": namespace["name"], "type": "Microsoft.ContainerService/managedClusters/managedNamespaces", "properties": {k:v for k,v in namespace.items() if k not in ("id", "name", "location", "resourceGroup")}}, ["managed_namespace"]
         if command == "network dns zone list": return [], []
         if command.startswith("network dns record-set "):
             raise WorldError("ResourceNotFound", "public DNS zone is not managed in this resource group", 404)
@@ -752,7 +769,8 @@ class World:
         if action == "auth" and len(words) >= 4 and words[1] == "can-i":
             principal = o.get("--as", self.context["developer_object_id"])
             resource = words[3]
-            allowed = self.namespace_access(words[2], resource, ns, principal)
+            access_ns = "*" if o.get("--all-namespaces", o.get("-A")) else ns
+            allowed = self.namespace_access(words[2], resource, access_ns, principal)
             tag = "access_pods_allow" if resource == "pods" and ns == "retail" and allowed else "access_secrets_deny" if resource == "secrets" and not allowed else "access_other_deny" if ns != "retail" and not allowed else ""
             if not allowed: raise WorldError("Forbidden", "no", 403, 1, tags=(tag,) if tag else ())
             return "yes", ([tag] if tag else [])
@@ -804,6 +822,11 @@ class World:
             return resource, []
         if action in ("exec", "run"):
             args = tail or words[2:]
+            if action == "run" and not tail:
+                if len(words) < 2 or "--image" not in o: raise WorldError("ArgumentError", "run requires pod name and image", 0, 2)
+                pod = obj("Pod", words[1], ns, {"containers": [{"name": words[1], "image": o["--image"], "imagePullPolicy": o.get("--image-pull-policy", "IfNotPresent")}], "restartPolicy": o.get("--restart", "Always")})
+                if "--overrides" in o: pod = merge(pod, json.loads(o["--overrides"]))
+                return self.apply(pod), []
             if action == "exec" and not args: raise WorldError("ArgumentError", "exec requires a command", 0, 2)
             if action == "exec":
                 reference = words[1].split("/", 1)
@@ -838,7 +861,8 @@ class World:
         if action in ("get", "describe", "top"):
             if self.name == "managed-namespace-rbac-plane" and kinds[0] in ("pod", "secret"):
                 principal = o.get("--as", self.context["developer_object_id"])
-                if not self.namespace_access("get" if name else "list", kinds[0], ns, principal):
+                access_ns = "*" if o.get("--all-namespaces", o.get("-A")) else ns
+                if not self.namespace_access("get" if name else "list", kinds[0], access_ns, principal):
                     tag = "access_secrets_deny" if kinds[0] == "secret" else "access_other_deny" if ns != "retail" else ""
                     raise WorldError("Forbidden", "authenticated principal is not authorized for this resource", 403, tags=(tag,) if tag else ())
             if action == "get" and len(references) > 2 and "/" not in ref:
@@ -906,6 +930,8 @@ class World:
             if kind in ("pod", "deployment"):
                 if resource["metadata"].get("namespace") == "retail" and (resource["metadata"]["name"] == "api" or resource["metadata"].get("labels", {}).get("app") == "api"):
                     tags += self.workload_tags()
+                if kind == "pod" and any(c.get("image") == self.context["approved_image"] and c.get("ready") for c in resource.get("status", {}).get("containerStatuses", [])):
+                    tags.append("pull")
         return list(set(tags))
 
     def workload_tags(self):

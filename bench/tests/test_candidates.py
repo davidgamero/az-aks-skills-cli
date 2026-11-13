@@ -197,3 +197,21 @@ class CandidateTests(unittest.TestCase):
             self.assertEqual(sim.call(args)["exit_code"], 0)
         self.assertEqual(execute(sim, kube("auth", "can-i", "--list", "-n", "retail"))["exit_code"], 0)
         self.assertEqual(execute(sim, kube("get", "namespace", "retail", "ingress", "other", "--show-labels"))["exit_code"], 0)
+
+    def test_namespace_reader_cannot_list_cluster_wide(self):
+        sim = self.simulator("managed-namespace-rbac-plane")
+        self.solve(sim)
+        for flag in ("--all-namespaces", "-A"):
+            for args in (("auth", "can-i", "list", "pods", flag), ("get", "pods", flag)):
+                self.assertEqual(execute(sim, kube(*args))["exit_code"], 1)
+        self.assertTrue(grade(sim.scenario, sim.state)["success"])
+
+    def test_fresh_pull_pod_reconciles_and_get_rest_stays_modeled(self):
+        sim = self.simulator("acr-abac-pull-repair")
+        self.solve(sim)
+        execute(sim, kube("run", "fresh-pull", "--image="+sim.scenario["context"]["approved_image"], "--restart=Never"))
+        self.assertEqual(execute(sim, kube("wait", "--for=condition=Ready", "pod/fresh-pull"))["exit_code"], 0)
+        sim = self.simulator("managed-namespace-selective-ingress")
+        url = "https://management.azure.com"+sim.scenario["context"]["approved_namespace_scope"]+"?api-version=2025-07-01"
+        self.assertEqual(sim.call(["rest", "--method", "get", "--url", url])["exit_code"], 0)
+        self.assertEqual(sim.call(["rest", "--method", "put", "--url", url])["exit_code"], 2)
