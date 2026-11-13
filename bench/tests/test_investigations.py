@@ -112,3 +112,25 @@ class InvestigationTests(unittest.TestCase):
             self.assertEqual(result["contextual"]["all_skill_read_trials"],1)
             self.assertEqual(result["contextual"]["skill_read_trials"],0)
             self.assertEqual(result["contextual_minus_help_successful_pairs"],[])
+
+    def test_supplementary_real_reads_are_authentic_without_decisive_credit(self):
+        sim=self.sim(NAMES[0]);sim.call(["config","current-context"],tool="kubectl")
+        self.solve(sim)
+        self.assertTrue(any(e["argv"]==["config","current-context"] for e in sim.state["_incident_observations"]))
+        sim.state["_incident_report"]["evidence"].append({"command":"date -u", "quote":"local timestamp conversion"})
+        result=grade(sim.scenario,sim.state)
+        self.assertTrue(result["success"]);self.assertEqual(result["unverified_local_citations"],["date -u"])
+
+    def test_metric_multivalue_and_case_aliases(self):
+        sim=self.sim(NAMES[0]);x=sim.scenario["context"]
+        args=["monitor","metrics","list","--resource",x["evidence_sources"]["load_balancer_id"],"--metric","UsedSNATPorts","AllocatedSNATPorts","SnatConnectionCount", "--start-time",x["incident_window"]["start"],"--end-time",x["incident_window"]["end"]]
+        result=sim.call(args);self.assertEqual(result["exit_code"],0,result)
+        self.assertEqual(len(json.loads(result["stdout"])["value"]),3)
+
+    def test_unscheduled_workloads_do_not_emit_crash_logs_or_memory_series(self):
+        for name in ("gpu-incident-plugin","gpu-incident-kaito-quota"):
+            sim=self.sim(name);x=sim.scenario["context"]
+            r=sim.call(["logs",x["pod"],"-n",x["namespace"],"--previous"],tool="kubectl")
+            self.assertEqual(r["exit_code"],1);self.assertNotEqual(sim.events[-1]["category"],"coverage_gap")
+            q=next(c for c in commands(sim.scenario) if isinstance(c,dict) and c.get("tool")=="curl")
+            r=execute(sim,q);self.assertEqual(json.loads(r["stdout"])["data"]["result"],[])

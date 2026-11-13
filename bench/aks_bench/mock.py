@@ -342,7 +342,7 @@ class Simulator:
             except (ValueError,TypeError,KeyError,IndexError,jmespath.exceptions.JMESPathError) as error:
                 response.update(stderr=f"ERROR: (ArgumentError) {error}\n",exit_code=2)
                 event["error_code"]="ArgumentError"
-            if response["exit_code"]==0 and signals:
+            if response["exit_code"]==0 and not skill and not help_call:
                 self.state.setdefault("_incident_observations",[]).append({"tool":tool,"argv":argv,"stdout":response["stdout"],"signals":signals})
             # Hints are a controlled tool-surface treatment, never data in JSON stdout.
             diagnostic=tool=="kubectl" and any(a in ("describe","logs","exec") for a in argv[:2]) or tool=="az" and argv[:2] in (["monitor","metrics"],["aks","nodepool"])

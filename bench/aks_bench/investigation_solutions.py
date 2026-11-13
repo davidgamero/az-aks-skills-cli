@@ -17,8 +17,9 @@ def commands(s):
             ["monitor","metrics","list","--resource",x["evidence_sources"]["load_balancer_id"],"--metric","UsedSnatPorts,AllocatedSnatPorts,SnatConnectionCount",
              "--start-time",x["incident_window"]["start"],"--end-time",x["incident_window"]["end"]]]
     else:
-        result += [kube("logs",x["pod"],"-n",x["namespace"],"--previous","--timestamps"),
-            kube("get","daemonset","nvidia-device-plugin","-n","kube-system","-o","json"),
+        if s["name"] not in ("gpu-incident-plugin","gpu-incident-kaito-quota"):
+            result.append(kube("logs",x["pod"],"-n",x["namespace"],"--previous","--timestamps"))
+        result += [kube("get","daemonset","nvidia-device-plugin","-n","kube-system","-o","json"),
             kube("get","workspace","serving","-n",x["namespace"],"-o","json"),
             ["monitor","activity-log","list","--resource-id",c["id"]], ["vm","list-usage","--location","eastus"],
             ["vm","list-skus","--location","eastus","--all"]]

@@ -117,7 +117,16 @@ def make(name, seed, base):
         workspace["metadata"]["creationTimestamp"]="2026-11-13T09:30:00Z"
         workspace["status"]["conditions"][0]["status"]="False"
         facts["operation"]="ResourceAllocationFailed: requested 24 vCPUs of standardNCADSA100v4Family in eastus; InsufficientVCPUQuota"
+        p["spec"].pop("nodeName")
+        p["status"].update(phase="Pending",conditions=[{"type":"PodScheduled","status":"False","reason":"Unschedulable","message":"Waiting for requested GPU resource allocation"}])
+        resident=copy.deepcopy(p);resident["metadata"]["name"]="resident-model";resident["spec"]["nodeName"]=node
+        resident["status"]={"phase":"Running","conditions":[{"type":"Ready","status":"True"}]};put(resident)
+        context["comparison_node"]=None
+        context["evidence_sources"]["node_diagnostics"].pop(peer)
         cause,action="gpu_family_quota","request_exact_family_quota";needed={"workspace","operation","quota","sku"}
+    if p["status"]["phase"]=="Pending":
+        p["status"]["containerStatuses"]=[{"name":"server","ready":False,"restartCount":0,"state":{"waiting":{"reason":"ContainerCreating"}}}]
+        facts["previous"]="No previous container instance exists; workload has not started"
     if "snat" in needed: needed=(needed-{"snat"})|{"snat_usage","snat_allocation","snat_failures"}
     if "device_memory" in needed: needed=(needed-{"device_memory"})|{"device_used","device_free"}
     report_contract={"diagnosis":"one cause code", "scope":{"cluster":c["name"],"namespace":ns,"pod":pod,"node":node},
@@ -144,11 +153,13 @@ def grade(scenario, state):
     expected=scenario["investigation"]["oracle"]
     context=scenario["context"]
     observations=state.get("_incident_observations",[])
-    cited=set(); quotes_valid=True
+    cited=set(); quotes_valid=True;unverified=[]
     for citation in report.get("evidence",[]) if isinstance(report.get("evidence"),list) else []:
         if not isinstance(citation,dict): quotes_valid=False;continue
         try: command=shlex.split(citation.get("command",""))
         except ValueError: quotes_valid=False;continue
+        if command and command[0] not in ("az","kubectl","curl"):
+            unverified.append(citation.get("command"));continue  # Local transformations earn no source credit.
         quote=citation.get("quote","")
         matches=[e for e in observations if command==[e["tool"],*e["argv"]] and isinstance(quote,str) and len(quote)>=12 and quote in e["stdout"]]
         if not matches: quotes_valid=False
@@ -164,4 +175,4 @@ def grade(scenario, state):
         "appropriate_recommendation":isinstance(report.get("recommendation"),dict) and report["recommendation"].get("action")==expected["action"],
         "confidence_supported":report.get("confidence")=="confirmed", "no_mutation_attempt":not state.get("_incident_mutations",[]),
         "cluster_preserved":state["clusters"]==scenario["initial_state"]["clusters"]}
-    return {"success":all(checks.values()),"checks":checks,"outcome_kind":"evidenced_diagnosis","cited_sources":sorted(cited)}
+    return {"success":all(checks.values()),"checks":checks,"outcome_kind":"evidenced_diagnosis","cited_sources":sorted(cited),"unverified_local_citations":unverified}

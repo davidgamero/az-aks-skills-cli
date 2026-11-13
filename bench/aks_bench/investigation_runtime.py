@@ -30,6 +30,8 @@ class Evidence:
         if tool=="curl": value,signals=self.curl(argv);options={}
         else:
             words,options,tail=parse(argv,tool)
+            if tool=="az" and words[:3]==["monitor","metrics","list"] and len(words)>3:
+                options["--metric"]=" ".join([options.get("--metric",""),*words[3:]]);words=words[:3]
             if tool=="az": value,signals=self.az(words,options)
             elif tool=="kubectl": value,signals=self.kube(words,options,tail)
             else: raise WorldError("MockNotImplemented","tool outside incident model",0,2)
@@ -52,7 +54,8 @@ class Evidence:
         if command=="monitor metrics list":
             if o.get("--resource")!=self.x["evidence_sources"]["load_balancer_id"]: raise WorldError("ResourceNotFound","metric resource not found",404)
             metric=o.get("--metric",o.get("--metrics",""))
-            requested=metric.replace(","," ").split()
+            names={v.lower():v for v in ("UsedSnatPorts","AllocatedSnatPorts","SnatConnectionCount")}
+            requested=[names.get(v.lower(),v) for v in metric.replace(","," ").split()]
             if not requested: raise WorldError("ArgumentError","--metric required",0,2)
             rows=[];signal={};historical=self.window(o)
             for name in requested:
@@ -99,22 +102,38 @@ class Evidence:
             if "operator" in ref or "kaito" in ref: return self.f.get("operation","Reconciliation completed; inspect Workspace conditions"),{"operation":["InsufficientVCPUQuota"]}
             if self.x["pod"] not in ref and not ref.startswith("deployment/"): raise WorldError("NotFound","log target not found",404)
             if self.family=="egress": return self.f["application"],{"application":["dns_ms=","ttfb_ms="]}
+            pending=self.s["name"] in ("gpu-incident-plugin","gpu-incident-kaito-quota")
+            if pending: raise WorldError("BadRequest","container has not started; inspect pod/Workspace scheduling and allocation status",400)
             return (self.f["previous"] if o.get("--previous") else "2026-11-13T10:30:00Z server process currently running"),{"previous":["torch.cuda.OutOfMemoryError","initialization"]} if o.get("--previous") else {}
         if action=="exec":
             if len(words)<2: raise WorldError("ArgumentError","exec target required",0,2)
             name=words[1].split("/")[-1]
             if not any(r["kind"]=="Pod" and r["metadata"]["name"]==name and r["metadata"].get("namespace")==ns for r in self.resources.values()): raise WorldError("NotFound","exec target not found",404)
             if tail[:2] in (["sh","-c"],["bash","-c"]) and len(tail)==3:
-                if any(c in tail[2] for c in (";","|","&&","$(","`")): raise WorldError("MockNotImplemented","compound remote shell outside fixture",0,2)
+                if ";" in tail[2] and not any(c in tail[2] for c in ("|","&&","$(","`")):
+                    outputs=[];signals={}
+                    for part in tail[2].split(";"):
+                        if not part.strip():continue
+                        value,sig=self.kube(words,o,shlex.split(part));outputs.append(value);signals.update(sig)
+                    return "\n".join(outputs),signals
+                if any(c in tail[2] for c in ("|","&&","$(","`")): raise WorldError("MockNotImplemented","compound remote shell outside fixture",0,2)
                 tail=shlex.split(tail[2])
             text=" ".join(tail)
             if text=="cat /etc/resolv.conf": return "nameserver 169.254.10.10\nsearch "+ns+".svc.cluster.local svc.cluster.local\noptions ndots:5",{}
+            if tail[:2]==["getent","hosts"] and tail[-1]=="payments.example.test": return "203.0.113.20 payments.example.test",{}
+            if tail and tail[0]=="cat" and all(p in ("/sys/fs/cgroup/memory.max","/sys/fs/cgroup/memory.events","/proc/meminfo") for p in tail[1:]):
+                limit=next(r for r in self.resources.values() if r["kind"]=="Pod" and r["metadata"]["name"]==self.x["pod"])["spec"]["containers"][0]["resources"]["limits"]["memory"]
+                from .candidate_runtime import quantity
+                output={"/sys/fs/cgroup/memory.max":str(int(quantity(limit))),"/sys/fs/cgroup/memory.events":"low 0\nhigh 0\nmax 1\noom 1\noom_kill 1" if self.s["name"]=="gpu-incident-container-memory" else "low 0\nhigh 0\nmax 0\noom 0\noom_kill 0","/proc/meminfo":"MemTotal: 230686720 kB\nMemAvailable: 167772160 kB"}
+                return "\n".join(output[p] for p in tail[1:]),{}
             if tail and tail[0] in ("dig","nslookup"):
                 failed="@10.1.0.4" in tail and self.s["name"]=="egress-incident-localdns" and name!="node-diag-b" and "+tcp" not in tail
                 return (";; connection timed out; no servers could be reached" if failed else "payments.example.test. 30 IN A 203.0.113.20\n;; Query time: 2 msec"),{}
             if tail and tail[0]=="tcpdump" and "-r" in tail and tail[tail.index("-r")+1]=="/captures/incident.pcap":
                 return (self.f["packet"] if name!="node-diag-b" else "10:04:00 SYN, SYN-ACK; TLS complete; HTTP response in 20ms"),{"packet":["first response byte","Flags [S]","no DNS response"]} if name!="node-diag-b" else {}
             if tail and tail[0]=="journalctl" and "localdns" in text: return self.f["resolver"],{"resolver":["duration_ms="]}
+            if tail and (tail[0]=="dmesg" or tail[0]=="journalctl" and ("-k" in tail or "kubelet" in tail)):
+                return ("2026-11-13T10:04:00Z memory cgroup limit reached; container server killed; node has available memory" if self.s["name"]=="gpu-incident-container-memory" else "No kernel OOM or node memory-pressure events in retained incident window"),{}
             if tail and tail[0]=="conntrack": return self.f["conntrack"],{}
             if tail and tail[0]=="ss": return "ESTAB 0 0 10.244.0.10:41000 203.0.113.20:443",{}
             if tail and tail[0]=="nvidia-smi": return "GPU 0 NVIDIA A100; Driver 550.54; memory.used 2000 MiB; memory.total 81000 MiB; current snapshot "+self.x["current_time"],{}
@@ -127,7 +146,9 @@ class Evidence:
         kinds=[{"workspaces":"workspace","ds":"daemonset","daemonsets":"daemonset","endpointslices":"endpointslice"}.get(k,k) for k in kinds]
         name=kindname[1] if len(kindname)>1 else words[2] if len(words)>2 else None
         if "event" in kinds:
-            return {"items":[{"lastTimestamp":"2026-11-13T10:04:00Z","reason":"Warning","message":"Intermittent request failure" if self.family=="egress" else "Inference readiness unavailable; inspect affected resource and historical telemetry"}]},{}
+            message="Intermittent request failure" if self.family=="egress" else "Inference readiness unavailable; inspect affected resource and historical telemetry"
+            if self.s["name"]=="gpu-incident-kaito-quota": message="Workspace serving ResourceReady=False: waiting for Azure GPU resource allocation; correlate allocation operation with region and instance type"
+            return {"items":[{"lastTimestamp":"2026-11-13T10:04:00Z","reason":"Warning","message":message}]},{}
         selected=[];signals={}
         for r in self.resources.values():
             if canonical(r["kind"]) not in kinds or name and r["metadata"]["name"]!=name: continue
@@ -153,7 +174,11 @@ class Evidence:
         if url.hostname=="metrics.monitoring.svc":
             query=params.get("query","");historical=url.path.endswith("query_range") and self.window(params)
             metric=next((m for m in ("DCGM_FI_DEV_FB_USED","DCGM_FI_DEV_FB_FREE","DCGM_FI_DEV_GPU_UTIL","container_memory_working_set_bytes") if m in query),None)
-            if metric is None: raise WorldError("MockNotImplemented","PromQL metric outside fixture",0,2)
+            if query.strip()=="node_nf_conntrack_entries / node_nf_conntrack_entries_limit":
+                return {"status":"success","data":{"resultType":"matrix","result":[{"metric":{"node":self.x["node"]},"values":[[1794564240,str(3000/262144)]]}]}},{}
+            if metric is None or self.s["name"] in ("gpu-incident-plugin","gpu-incident-kaito-quota"):
+                # This telemetry fixture has no matching series for unknown metrics or unscheduled containers.
+                return {"status":"success","data":{"resultType":"matrix","result":[]}},{}
             val={"DCGM_FI_DEV_FB_USED":self.f["fb_used"],"DCGM_FI_DEV_FB_FREE":self.f["fb_free"],"DCGM_FI_DEV_GPU_UTIL":0,"container_memory_working_set_bytes":self.f["rss"]}[metric] if historical else 1024
             labels={"__name__":metric,"namespace":self.x["namespace"],"pod":self.x["pod"],"node":self.x["node"],"container":"server","gpu":"0"}
             result=[{"metric":labels,"values":[[1794564240,str(val)]]},{"metric":{**labels,"node":self.x["comparison_node"],"pod":"comparison-pod"},"values":[[1794564240,"1024"]]}]

@@ -67,7 +67,10 @@ alone do not count as evidence citations. Resource mutation attempts fail this
 read-only task even when the simulator rejects them.
 
 The score is **structural**, not an LLM judgment of causal reasoning quality.
-Alternative labels and the recommendation action are checked; the prose explaining
+Supplementary citations to local transformations (for example `date` converting a
+metric timestamp) are reported as unverified and earn no decisive-source credit.
+All cited az/kubectl/curl excerpts must match retained responses, including ordinary
+nondecisive reads. Alternative labels and the recommendation action are checked; the prose explaining
 them still needs trace review. Exact-citation failures must be distinguished from
 wrong diagnoses in the report. Diagnosis-file completion is measured at process
 exit, not asserted as a precisely observed earlier root-cause timestamp.
@@ -134,4 +137,19 @@ also exercises all seven reference investigations through the actual isolated
 clients. Reference reports are host-generated for that check and are never live
 model evidence.
 
-Live smoke results will be added after the frozen three-condition run.
+## First live smoke and corrections
+
+The first 21-trial run at `30ed90f` is preserved under
+`benchmark-results/investigation-discovery-20261113`. Contextual references led
+to four successful skill reads across seven trials; help-only led to zero. This
+is an exposure/retrieval observation, not a valid efficacy comparison: 18 trials
+had coverage gaps, and all 21 suffered a citation-retention bug. Ordinary real
+responses were not retained unless tagged decisive, so authentic supplementary
+citations were incorrectly rejected.
+
+Corrections retain all successful response evidence, give unlogged local
+transformations no decisive credit, support multi-value metric syntax and common
+read-only diagnostic utilities, and make Pending GPU/KAITO data consistent: no
+crash logs or memory telemetry for a container that never started. Those changes
+require a new frozen run. The first run remains intact rather than being presented
+as model failures or having elapsed times silently rescored.
