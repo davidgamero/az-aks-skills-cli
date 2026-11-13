@@ -16,6 +16,12 @@ two arms:
 - **Skills:** the same fake Azure CLI, with the repository's actual skill
   parser/renderer and a versioned catalog of general AKS procedures.
 
+The treatment also accepts the `az aks skills` alias. Bare groups print help;
+alias calls are recorded with their original argv and a normalized `aks skill`
+command name so adoption counts include both spellings. Both spellings are
+unavailable in the baseline. This help/alias improvement postdates the initial
+pilot; historical pilot results describe the earlier interface.
+
 `--discovery explicit` adds a short instruction to consult the CLI runbooks in
 the skills arm. It measures **guided use**, including retrieval overhead.
 `--discovery passive` uses identical prompts in both arms and exposes skills only

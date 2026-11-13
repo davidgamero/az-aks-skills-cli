@@ -129,9 +129,9 @@ class Simulator:
             try:
                 command, opts = parse(argv)
                 event["command"] = command
-                if argv[:2] == ["aks", "skill"]:
+                if len(argv) >= 2 and argv[0] == "aks" and argv[1] in ("skill", "skills"):
                     event["category"] = "skill"
-                    event["command"] = " ".join(argv[:3])
+                    event["command"] = " ".join(["aks", "skill", *argv[2:3]])
                     if not self.skills:
                         raise CLIError("CommandNotFound", "'skill' is not in the 'az aks' command group", 0, 2)
                     # Exercise the actual prototype parser/renderer, not a second approximation.

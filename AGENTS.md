@@ -3,8 +3,9 @@
 This is a dependency-free Python experiment for `az aks skill`, implemented as
 a PATH shim rather than an Azure CLI extension. Read `docs/design.md` first.
 
-- Own only the exact `aks skill` argument prefix. Forward every other invocation
-  to the real Azure CLI using `os.execv` without parsing or rewriting arguments.
+- Own only the exact `aks skill` and `aks skills` (alias) argument prefixes.
+  Forward every other invocation to the real Azure CLI using `os.execv` without
+  parsing or rewriting arguments.
 - Skill commands print content; they never execute instructions in skills.
 - Keep stdout usable as data and write errors to stderr.
 - Support Python 3.10+ and use only the standard library.

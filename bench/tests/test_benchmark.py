@@ -143,6 +143,18 @@ class SimulatorTests(unittest.TestCase):
         self.assertEqual(result["exit_code"], 2)
         self.assertNotIn("skill", self.call("aks", "--help")["stdout"])
 
+    def test_plural_help_and_reads_use_actual_cli_and_are_tracked(self):
+        result = self.call("aks skills")
+        self.assertEqual(result["exit_code"], 0, result)
+        self.assertTrue(result["stdout"].startswith("Group\n"))
+        self.assertEqual(self.sim.events[-1]["category"], "skill")
+        result = self.call("aks skills show", "--name", "aks-fixed-capacity")
+        self.assertEqual(result["exit_code"], 0, result)
+        self.assertEqual(self.sim.events[-1]["command"], "aks skill show")
+        self.assertEqual(self.sim.events[-1]["modeled_api_requests"], 0)
+        self.sim.skills = False
+        self.assertEqual(self.call("aks skills")["exit_code"], 2)
+
     def test_host_server_preserves_events_under_concurrency(self):
         with tempfile.TemporaryDirectory() as directory:
             log = Path(directory) / "trace.jsonl"

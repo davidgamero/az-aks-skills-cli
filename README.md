@@ -9,7 +9,8 @@ az aks skill search "upgrade"
 az aks skill show --name aks-upgrade
 ```
 
-An executable `bin/az` owns **only** the exact `az aks skill` prefix. Every other
+An executable `bin/az` owns the exact `az aks skill` prefix and its `az aks skills`
+alias. Every other
 invocation is handed to the installed Azure CLI. Skills are Markdown instructions;
 the commands print them without executing their contents.
 
@@ -25,6 +26,20 @@ From either checkout:
 ./bin/az aks skill show --name aks-upgrade -o json
 ./bin/az aks skill --help
 ```
+
+Running just `az aks skill` or `az aks skills` prints group help and exits
+successfully. Help follows Azure CLI's `Group`/`Command`, `Commands`, `Arguments`,
+`Global Arguments`, and `Examples` layout. Use `-h` or `--help` on the group or
+any subcommand:
+
+```sh
+az aks skills
+az aks skill search --help
+az aks skill show --help
+```
+
+`skills` is an alias for the entire command group. Search takes positional text
+(`search "upgrade"`); show takes `--name` (`show --name aks-upgrade`).
 
 To make the shim the `az` command in your current Bash or Zsh session, run this
 from the checkout **before adding its `bin` to PATH**:

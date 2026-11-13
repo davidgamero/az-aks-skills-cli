@@ -88,10 +88,36 @@ class ShimTests(unittest.TestCase):
     def test_help_does_not_require_catalog_or_real_az(self):
         self.env["AZ_AKS_SKILLS_DIR"] = str(self.work / "missing")
         self.env["AZ_AKS_REAL_AZ"] = str(self.work / "missing-az")
-        result = self.invoke("aks", "skill", "--help")
-        self.assertEqual(result.returncode, 0, result.stderr)
-        for command in ("show", "list", "search"):
-            self.assertIn(command, result.stdout)
+        for group in ("skill", "skills"):
+            for arguments in ([], ["--help"], ["-h"]):
+                with self.subTest(group=group, arguments=arguments):
+                    result = self.invoke("aks", group, *arguments)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stderr, "")
+                    self.assertTrue(result.stdout.startswith("Group\n"))
+                    for text in ("Commands:", "Examples", "list", "search", "show",
+                                 f"az aks {group} show --name aks-upgrade"):
+                        self.assertIn(text, result.stdout)
+
+    def test_subcommand_help_explains_required_syntax(self):
+        for group in ("skill", "skills"):
+            for command, required in (("show", "--name [Required]"), ("search", "QUERY [Required]"),
+                                      ("list", "Default: table.")):
+                with self.subTest(group=group, command=command):
+                    result = self.invoke("aks", group, command, "--help")
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertTrue(result.stdout.startswith("Command\n"))
+                    self.assertIn(required, result.stdout)
+                    self.assertIn("Examples", result.stdout)
+
+    def test_plural_alias_returns_the_same_data(self):
+        for args in (["list", "-o", "json"], ["search", "upgrade", "-o", "json"],
+                     ["show", "--name", "aks-upgrade"]):
+            with self.subTest(args=args):
+                singular = self.invoke("aks", "skill", *args)
+                plural = self.invoke("aks", "skills", *args)
+                self.assertEqual(plural.returncode, 0, plural.stderr)
+                self.assertEqual(plural.stdout, singular.stdout)
 
     def test_passthrough_preserves_process_inputs_and_exit_status(self):
         self.env["TEST_VALUE"] = "environment unchanged"
@@ -105,7 +131,7 @@ class ShimTests(unittest.TestCase):
         self.assertEqual(result.stderr, "real az stderr\n")
 
     def test_only_exact_prefix_is_owned(self):
-        for args in ([], ["--help"], ["aks", "--help"], ["aks", "skills", "list"],
+        for args in ([], ["--help"], ["aks", "--help"], ["aks", "skillset", "list"],
                      ["account", "show"], ["--debug", "aks", "skill", "list"]):
             with self.subTest(args=args):
                 result = self.invoke(*args)

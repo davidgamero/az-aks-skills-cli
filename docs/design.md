@@ -15,7 +15,7 @@ shell / agent
     v
 checkout/bin/az (first on PATH)
     |
-    +-- argv starts with ["aks", "skill"]
+    +-- argv starts with ["aks", "skill"] or ["aks", "skills"]
     |       -> local argument parser
     |       -> catalog metadata / Markdown
     |       -> stdout
@@ -26,7 +26,7 @@ checkout/bin/az (first on PATH)
 ```
 
 The routing decision happens before argument parsing. Unknown local subcommands
-fail locally, while `az aks skills`, `az aks show`, `az account show`, bare `az`,
+fail locally, while `az aks show`, `az account show`, bare `az`,
 and normal Azure CLI help all reach the real CLI. Quoted values and flags are
 preserved as individual arguments: no shell command is reconstructed.
 
@@ -56,7 +56,11 @@ with an executable shim on PATH; Windows launcher support is a future task.
   case-insensitive substring matching, sorted by ID. No remote search or ranking.
 - `show --name ID [-o markdown|json]`: exact ID lookup; prints the original
   Markdown or a summary object with an additional `content` string.
-- `--help` is available for the group and each subcommand.
+- `skills` is an alias for `skill`, including all commands and help.
+- A bare `az aks skill` or `az aks skills` prints group help to stdout and exits 0.
+- `-h`/`--help` is available for the group and each subcommand. Help uses Azure
+  CLI-style Group/Command, Commands, Arguments, Global Arguments, and Examples
+  sections, with required argument markers and explicit search/show syntax.
 - Success and empty search: 0. Catalog/lookup failure: 1. Argument error: 2.
   Forwarding failure: 127. Forwarded commands retain their actual exit status.
 - Normal output goes to stdout; error diagnostics go to stderr.

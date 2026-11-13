@@ -35,8 +35,8 @@ def find_real_az(shim_path: Path) -> Path:
 
 def main(shim_path: Path) -> int:
     args = sys.argv[1:]
-    if args[:2] == ["aks", "skill"]:
-        return run(args[2:])
+    if len(args) >= 2 and args[0] == "aks" and args[1] in ("skill", "skills"):
+        return run(args[2:], prog=f"az aks {args[1]}")
     try:
         real_az = find_real_az(shim_path)
         visited = os.environ.get("_AZ_AKS_SKILL_SHIMS", "")
