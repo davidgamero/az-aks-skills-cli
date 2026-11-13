@@ -117,10 +117,11 @@ def render(value, options):
 
 
 class Simulator:
-    def __init__(self, scenario, skills=False, log_path=None, latency_scale=1.0, docs_mode="off"):
+    def __init__(self, scenario, skills=False, log_path=None, latency_scale=1.0, docs_mode="off", skills_dir=None):
         self.scenario = copy.deepcopy(scenario)
         self.state = copy.deepcopy(scenario["state"])
         self.skills = skills
+        self.skills_dir = Path(skills_dir).resolve() if skills_dir is not None else ROOT / "skills"
         self.log_path = Path(log_path) if log_path else None
         self.events = []
         self.lock = threading.Lock()
@@ -168,7 +169,7 @@ class Simulator:
                     if not self.skills:
                         raise CLIError("CommandNotFound", "'skill' is not in the 'az aks' command group", 0, 2)
                     # Exercise the actual prototype parser/renderer, not a second approximation.
-                    env = {**os.environ, "AZ_AKS_SKILLS_DIR": str(ROOT / "skills")}
+                    env = {**os.environ, "AZ_AKS_SKILLS_DIR": str(self.skills_dir)}
                     result = subprocess.run([sys.executable, str(ROOT.parent / "bin" / "az"), *argv],
                                             capture_output=True, text=True, env=env, timeout=10)
                     response.update(stdout=result.stdout, stderr=result.stderr, exit_code=result.returncode)

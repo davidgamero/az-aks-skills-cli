@@ -1,21 +1,24 @@
 # Upgrade only the control plane
 
-Read `az aks show -g RG -n CLUSTER` to capture the control plane and agentPoolProfiles
-versions. Check eligible targets using `az aks get-upgrades -g RG -n CLUSTER`.
-Do not assume the newest regional version is a valid direct upgrade target.
+Use for an authorized control-plane-only upgrade. Reuse a recent aks show response:
+it includes both the control plane and agentPoolProfiles, so another pool inventory
+is unnecessary. If needed, obtain that response and eligible targets in one shell
+call with `az aks show -g RG -n CLUSTER && az aks get-upgrades -g RG -n CLUSTER`.
+Use the requested eligible target, not simply the newest regional version.
 
-For a control-plane-only request, use:
+Once the target and prerequisites are confirmed, run:
 
 ```sh
-az aks upgrade -g RG -n CLUSTER --kubernetes-version VERSION --control-plane-only --yes
+az aks upgrade -g RG -n CLUSTER --kubernetes-version VERSION --control-plane-only --yes -o none &&
+az aks show -g RG -n CLUSTER
 ```
 
-Omitting --control-plane-only also upgrades node pools. Control-plane-only upgrades
-are incompatible with cluster autoupgrade. For supported non-LTS clusters, don't
-skip minor versions. Node pools must not be newer than the control plane.
-
-Verify kubernetesVersion and provisioningState with aks show, and compare the
-agentPoolProfiles versions with the initial versions. The synchronous command
-waits for completion; --no-wait requires a later wait or polling.
+The final show verifies version, Succeeded state and unchanged pool versions.
+Keep --control-plane-only: omitting it also upgrades pools. This operation is
+incompatible with cluster autoupgrade; do not disable policy as a shortcut.
+Supported non-LTS clusters cannot skip minor versions. Reuse completed preflight
+checks; investigate workloads/PDBs when required by the task or a drain failure,
+not as a new investigation for an already diagnosed version-only error. Default
+upgrade waits; only --no-wait needs separate waiting.
 
 Source: https://learn.microsoft.com/en-us/azure/aks/upgrade-aks-control-plane

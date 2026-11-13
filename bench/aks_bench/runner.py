@@ -22,6 +22,7 @@ from .scenarios import NAMES, make, grade
 from .services import Services
 from . import automatic
 from . import troubleshooting
+from . import catalogs
 
 COPILOT_HOSTS = {"api.github.com", "api.githubcopilot.com", "api.individual.githubcopilot.com",
                  "api.business.githubcopilot.com", "api.enterprise.githubcopilot.com",
@@ -206,7 +207,7 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
     if args.fixture:
         scenario = json.loads(Path(args.fixture).read_text())
     sim = Simulator(scenario, skills=skills, log_path=directory / "az-events.jsonl", latency_scale=args.latency_scale,
-                    docs_mode=getattr(args, "docs_mode", "off"))
+                    docs_mode=getattr(args, "docs_mode", "off"), skills_dir=getattr(args, "skills_dir", None))
     prompt = scenario["prompt"]
     json_file(directory / "scenario.json", scenario)
     (directory / "prompt.txt").write_text(prompt + "\n")
@@ -258,6 +259,8 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
     state_grade = grade(scenario, sim.state)
     unsupported = sum(e["category"] == "coverage_gap" for e in sim.events)
     result = {"scenario": scenario["name"], "seed": seed, "skills": skills,
+              "condition": getattr(args, "condition", "skills" if skills else "baseline"),
+              "catalog_sha256": catalogs.fingerprint(sim.skills_dir) if skills else None,
               "discovery": args.discovery, "mode": mode, "engine": args.engine if mode != "replay" else None,
               "requested_model": args.model if mode == "live" else None, "provider": args.provider if mode == "live" else None,
               "elapsed_s": elapsed, "time_to_goal_s": sim.first_goal_s,
@@ -294,6 +297,8 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
 
 def report(directory):
     results = [json.loads(p.read_text()) for p in sorted(Path(directory).glob("*/result.json"))]
+    if any(r.get("condition") in ("original", "revised") for r in results):
+        return catalogs.comparison_report(directory, results)
     grouped = {}
     for r in results:
         key = (r["scenario"], r["requested_model"], r["provider"], r["discovery"], r["mode"], r.get("docs_mode", "off"))
@@ -351,7 +356,7 @@ def report(directory):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Stateful, isolated AKS skill benchmark")
-    parser.add_argument("action", choices=("run", "replay", "check", "report", "coverage"))
+    parser.add_argument("action", choices=("run", "compare", "replay", "check", "report", "coverage"))
     parser.add_argument("--output", type=Path, default=Path("benchmark-results") / time.strftime("%Y%m%d-%H%M%S"))
     parser.add_argument("--model", default="gpt-6.1-sol")
     parser.add_argument("--provider", choices=("copilot", "foundry"), default="copilot")
@@ -367,6 +372,8 @@ def main(argv=None):
     parser.add_argument("--discovery", choices=("passive",), default="passive",
                         help="Discovery-only: both arms receive identical task prompts")
     parser.add_argument("--fixture", help="Use a complete custom scenario JSON instead of generated fixtures")
+    parser.add_argument("--skills-dir", type=Path, default=ROOT / "skills", help="Skill catalog to snapshot for this run")
+    parser.add_argument("--reference-skills-dir", type=Path, help="Original catalog for the baseline/original/revised compare action")
     parser.add_argument("--docs-mode", choices=("live", "off"), default="live",
                         help="Allow logged GET-only Microsoft Learn access through the container curl tool")
     args = parser.parse_args(argv)
@@ -374,6 +381,8 @@ def main(argv=None):
         parser.error("repeats/timeout must be positive and latency-scale nonnegative")
     if args.fixture and len(args.scenarios) != 1:
         parser.error("--fixture requires exactly one --scenarios entry")
+    if args.action == "compare" and args.reference_skills_dir is None:
+        parser.error("compare requires --reference-skills-dir")
     if args.action == "coverage":
         print(json.dumps({"recognized": len(COMMANDS), "semantic": sorted(SEMANTIC),
                           "fixture_required": sorted(set(COMMANDS) - SEMANTIC)}, indent=2))
@@ -385,10 +394,17 @@ def main(argv=None):
     if args.output.exists():
         parser.error("output directory already exists; choose a fresh directory or use report")
     args.output.mkdir(parents=True)
+    original_dir = args.output / "catalog-original"
+    selected_dir = args.output / "catalog-selected"
+    selected_hash = catalogs.freeze(args.skills_dir, selected_dir)
+    reference_hash = catalogs.freeze(args.reference_skills_dir, original_dir) if args.action == "compare" else None
+    args.skills_dir = selected_dir
     metadata = {"model": args.model, "provider": args.provider, "engine": args.engine,
                 "discovery": args.discovery, "repeats": args.repeats, "seed": args.seed,
                 "latency_scale": args.latency_scale, "docs_mode": args.docs_mode, "created_at": time.time(),
                 "command_manifest_sha256": hashlib.sha256((ROOT / "commands.json").read_bytes()).hexdigest()}
+    metadata.update(action=args.action, catalog_sha256=selected_hash, reference_catalog_sha256=reference_hash,
+                    scenarios=args.scenarios)
     metadata["source_sha256"] = hashlib.sha256(b"".join(
         str(p.relative_to(ROOT)).encode() + p.read_bytes()
         for p in sorted(ROOT.rglob("*")) if p.is_file() and p.suffix in (".py", ".json", ".md")
@@ -415,12 +431,16 @@ def main(argv=None):
     rng = random.Random(args.seed)
     for repeat in range(args.repeats):
         for scenario in args.scenarios:
-            arms = [False, True]
+            arms = [("baseline", False, selected_dir), ("skills", True, selected_dir)]
+            if args.action == "compare":
+                arms = [("baseline", False, selected_dir), ("original", True, original_dir), ("revised", True, selected_dir)]
             rng.shuffle(arms)
-            for skills in arms:
-                label = f"{scenario}-{args.seed + repeat}-{'skills' if skills else 'baseline'}"
+            for condition, skills, skills_dir in arms:
+                label = f"{scenario}-{args.seed + repeat}-{condition}"
                 print(f"Starting {label} ({mode}, {args.model})", flush=True)
-                result = trial(args, scenario, args.seed + repeat, skills, args.output / label, mode=mode)
+                trial_args = argparse.Namespace(**vars(args))
+                trial_args.skills_dir, trial_args.condition = skills_dir, condition
+                result = trial(trial_args, scenario, args.seed + repeat, skills, args.output / label, mode=mode)
                 invalid = invalid or (mode == "live" and not result["valid_trial"])
                 print(json.dumps({k: result[k] for k in ("success", "valid_trial", "elapsed_s", "az_calls", "skill_calls", "modeled_api_requests")}), flush=True)
                 report(args.output)

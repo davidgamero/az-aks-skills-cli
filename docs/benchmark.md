@@ -5,6 +5,8 @@ See [the initial GPT-6.1 Sol pilot](benchmark-pilot.md) for measured results fro
 The [help-change rerun](benchmark-help-evaluation.md) records 14 further trials
 and the exact original tasks. [AKS Automatic research and scenarios](aks-automatic-scenarios.md)
 describe the two additional Automatic tasks.
+The [skill-content tuning experiment](skill-catalog-tuning.md) compares frozen
+original and revised catalogs against the same no-skills control.
 
 ## Question and experimental unit
 
@@ -317,6 +319,9 @@ An npm JavaScript launcher needs its runtime/dependencies packaged separately;
 the current container path is tested with the standalone binary.
 
 Discovery-only is automatic; `--discovery passive` remains accepted for clarity.
+Use `--skills-dir PATH` to select a catalog; it is copied into the run directory
+and fingerprinted before execution. `compare --reference-skills-dir OLD_PATH`
+runs baseline/original/revised conditions in interleaved seeded order.
 For another model, use `--model EXACT-COPILOT-MODEL-ID`. Unsupported model IDs are
 reported as failures, not replaced with another model. The same seed across model
 runs gives matched scenario inputs, but models should be analyzed separately.

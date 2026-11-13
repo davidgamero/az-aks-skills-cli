@@ -10,9 +10,9 @@ class CatalogError(Exception):
 
 
 class Catalog:
-    def __init__(self) -> None:
+    def __init__(self, root: Path | None = None) -> None:
         default = Path(__file__).resolve().parents[2] / "skills"
-        self.root = Path(os.environ.get("AZ_AKS_SKILLS_DIR", str(default))).resolve()
+        self.root = Path(root if root is not None else os.environ.get("AZ_AKS_SKILLS_DIR", str(default))).resolve()
         try:
             data = json.loads((self.root / "index.json").read_text(encoding="utf-8"))
         except (OSError, UnicodeError, ValueError) as error:

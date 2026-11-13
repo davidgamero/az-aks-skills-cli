@@ -1,23 +1,28 @@
 # Recover a failed node pool upgrade
 
-For `NodePoolMcVersionIncompatible`, compare the current control-plane version
-with the requested pool version. A node pool cannot be newer than its control
-plane. Inspect the cluster once with `az aks show -g RG -n CLUSTER`, which also
-includes agentPoolProfiles, and use `az aks get-upgrades -g RG -n CLUSTER` to
-confirm the requested control-plane target is offered.
+Use for NodePoolMcVersionIncompatible when the requested pool version is newer
+than its control plane. Reuse the error and recent cluster data. One aks show
+includes pool versions/counts; one get-upgrades confirms the eligible target.
+Don't repeat failure-history searches once the version mismatch is established.
 
-If the target pool version is newer and the task permits a control-plane upgrade:
+With an eligible target and authorization for the control-plane change, execute
+the complete sequence in one shell call:
 
 ```sh
-az aks upgrade -g RG -n CLUSTER --kubernetes-version VERSION --control-plane-only --yes
-az aks nodepool upgrade -g RG --cluster-name CLUSTER -n POOL --kubernetes-version VERSION
+az aks upgrade -g RG -n CLUSTER --kubernetes-version VERSION --control-plane-only --yes -o none &&
+az aks nodepool upgrade -g RG --cluster-name CLUSTER -n POOL --kubernetes-version VERSION -o none &&
 az aks show -g RG -n CLUSTER
 ```
 
-Preserve unrelated pool versions and counts. An ordinary full-cluster upgrade
-would also change other pools. Verify both the target version and the repaired
-pool's provisioningState. If the task does not authorize the necessary change,
-report the blocker rather than repeatedly retrying an incompatible version.
+The final response verifies both target versions, pool recovery and unchanged
+other pools/counts. This includes the control-plane procedure; no second skill is
+needed. Default upgrades wait, so avoid extra waits/polling unless using --no-wait.
+
+Keep --control-plane-only to preserve other pools. Do not bypass auto-upgrade
+policy or version support rules. This management-plane validation error is not
+evidence of a PDB, node-health or credential problem; investigate those only when
+the task requires it or the next error identifies one. If the target/change is
+not authorized or supported, report that blocker instead of retrying blindly.
 
 Source: https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/error-codes/nodepoolmcversionincompatible-error
 The no-newer-than-control-plane rule is used here; older documentation's maximum

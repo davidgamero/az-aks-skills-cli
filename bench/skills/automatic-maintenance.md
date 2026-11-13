@@ -1,36 +1,30 @@
 # Schedule AKS Automatic maintenance
 
-Automatic uses the stable Kubernetes upgrade channel and NodeImage node OS
-channel. Adjust maintenance schedules without disabling those channels or
-initiating an immediate upgrade.
-
-Inspect existing child resources once:
-
-```sh
-az aks maintenanceconfiguration list --resource-group RG --cluster-name CLUSTER
-```
-
-Select the configuration by the kind of upgrade:
+Use for schedule changes, not immediate upgrades. Automatic keeps stable/NodeImage
+channels. Reuse the current maintenanceconfiguration list, or obtain it once.
+Select the exact child resource:
 
 - `aksManagedAutoUpgradeSchedule`: Kubernetes auto-upgrades.
 - `aksManagedNodeOSUpgradeSchedule`: node OS/image auto-upgrades.
 - `default`: platform/component releases; this does not replace the other two.
 
-For each requested weekly window, use `update` if the resource exists, or `add`
-if absent. Substitute the user's day, start time, UTC offset and duration:
+For each requested window, choose update if present or add if absent. After
+checking inputs, put both independent updates and the final list in one shell
+call, joining commands with &&. A weekly update has this form:
 
 ```sh
-az aks maintenanceconfiguration update --resource-group RG --cluster-name CLUSTER --name CONFIGURATION --schedule-type Weekly --day-of-week DAY --interval-weeks 1 --duration HOURS --start-time HH:MM --utc-offset +00:00
+az aks maintenanceconfiguration update -g RG --cluster-name CLUSTER -n CONFIGURATION --schedule-type Weekly --day-of-week DAY --interval-weeks 1 --duration HOURS --start-time HH:MM --utc-offset OFFSET -o none
 ```
 
-Durations must be at least four hours; a window from 02:00 to 06:00 is duration 4,
-not an end-time parameter. Keep unrelated schedules and other cluster settings
-unchanged. Verify both target child resources with a final maintenanceconfiguration
-list or individual show calls; aks show alone does not return their schedules.
+Finish with `az aks maintenanceconfiguration list -g RG --cluster-name CLUSTER`.
+One list verifies both target schedules and the unchanged default; aks show
+does not return these child resources. Reuse any existing cluster/channel check
+instead of repeating it around each child update. Do not alter unrelated settings.
 
-Maintenance windows are best-effort scheduling preferences. Urgent/reactive
-maintenance can occur outside them, and work started within a window can finish
-after it closes.
+Use the user's dates/times, duration and offset. Duration is hours, not an end-time
+field, and must be at least four hours. Skip a window already matching the request.
+Maintenance is best effort; urgent work can bypass windows and in-flight work may
+finish after closure.
 
 Sources:
 - https://learn.microsoft.com/en-us/azure/aks/planned-maintenance

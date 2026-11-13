@@ -1,21 +1,29 @@
 # Recover Automatic creation from missing registration
 
-`MissingSubscriptionRegistration` identifies a provider namespace that is not
-registered. Automatic enables Azure Policy, so Microsoft.PolicyInsights must be
-registered even if the cluster resource itself uses Microsoft.ContainerService.
+Use once MissingSubscriptionRegistration identifies the missing namespace.
+Automatic needs Microsoft.PolicyInsights for Policy, independently of
+Microsoft.ContainerService. If the error is already known, do not repeat
+activity-log searches, provider listings, or another failing create to rediscover it.
 
-Read the exact error and inspect that namespace:
+With registration authorized and the original creation inputs confirmed, run the
+complete recovery in one shell call; retain any other required original options:
 
 ```sh
-az provider show --namespace PROVIDER --query registrationState -o tsv
-az provider register --namespace PROVIDER --wait
+az provider register --namespace PROVIDER --wait -o none &&
+az aks create -g RG -n CLUSTER --location REGION --sku automatic --enable-hosted-system -o none &&
+az aks show -g RG -n CLUSTER
 ```
 
-Registration requires subscription-level permission. Once registered, retry the
-original `az aks create ... --sku automatic --enable-hosted-system` and verify
-the cluster with `az aks show`. Do not change SKU, disable required features, or
-register unrelated providers merely to suppress the error. A registration failure
-with AuthorizationFailed is a permission issue, not a reason to loop retries.
+The final show verifies Automatic/Standard SKU-tier, hostedSystemProfile.enabled,
+Auto provisioning, stable/NodeImage channels and Succeeded. This recipe includes
+creation and verification; a second creation skill is unnecessary for this error.
+
+If the failure is still unknown, inspect one relevant failed operation first.
+If registration completion is uncertain, query only that provider's state.
+--wait already waits; don't add polling after success. An existing cluster or a
+different failure requires reassessment. AuthorizationFailed needs permission,
+not retries. Do not change SKU, disable managed features, register unrelated
+providers or download kubeconfig to verify a management-plane creation.
 
 Sources:
 - https://learn.microsoft.com/en-us/azure/azure-resource-manager/troubleshooting/error-register-resource-provider
