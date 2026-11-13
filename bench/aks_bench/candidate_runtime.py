@@ -32,11 +32,12 @@ ALIASES = {"ns": "namespace", "namespaces": "namespace", "po": "pod", "pods": "p
            "nodenetworkconfigs": "nodenetworkconfig", "secretproviderclasses": "secretproviderclass",
            "gateways": "gateway", "httproutes": "httproute", "gatewayclasses": "gatewayclass", "rs": "replicaset",
            "replicasets": "replicaset", "events": "event", "limitranges": "limitrange", "cm": "configmap", "configmaps": "configmap"}
+ALIASES.update({"secretproviderclasspodstatuses": "secretproviderclasspodstatus", "daemonsets": "daemonset", "endpoints": "endpoints", "ep": "endpoints"})
 CLUSTER_KINDS = {"namespace", "node", "nodepool", "nodeclaim", "aksnodeclass", "gatewayclass", "clusterrole", "clusterrolebinding", "customresourcedefinition"}
 BOOLS = {"--help", "-h", "--yes", "-y", "--no-wait", "--wait", "--overwrite", "--overwrite-existing", "--all-namespaces", "-A",
          "--include-inherited", "--all", "--only-show-errors", "--admin", "--enable-oidc-issuer", "--enable-workload-identity",
          "--enable-gateway-api", "--enable-app-routing-istio", "--enable-acns", "--enable-secret-rotation", "--force", "--ignore-not-found"}
-BOOLS.update({"--control-plane-only", "--version", "--rm", "-i", "-t", "--stdin", "--tty"})
+BOOLS.update({"--control-plane-only", "--version", "--rm", "-i", "-t", "--stdin", "--tty", "--list", "--show-labels", "--ignore-errors"})
 MULTI = {"--labels", "--annotations", "--tags", "--audiences", "--excluded-ns", "--set"}
 
 
@@ -86,6 +87,9 @@ def merge(old, patch, strategic=False):
             result = copy.deepcopy(old)
             for value in patch:
                 index = next((i for i, v in enumerate(result) if v["name"] == value["name"]), None)
+                if value.get("$patch") == "delete":
+                    if index is not None: result.pop(index)
+                    continue
                 if index is None:
                     result.append(copy.deepcopy(value))
                 else:
@@ -419,6 +423,8 @@ class World:
             self.w["violations"].append("pdb-changed")
         if kind == "nodepool" and old and ("replicas" in old["spec"]) != ("replicas" in resource.get("spec", {})):
             raise WorldError("InvalidParameter", "NodePool static/dynamic mode cannot be switched")
+        if kind == "deployment" and self.name == "csi-rotation-consumption-mode" and old and resource.get("spec", {}).get("template") != old["spec"].get("template"):
+            self.w["app_secret_version"] = self.w["secret_source_version"]
         put(self.w, resource)
         return resource
 
@@ -429,6 +435,9 @@ class World:
         if str(output).startswith("jsonpath="): return jsonpath(output, value)
         if isinstance(value, str): return value + ("" if value.endswith("\n") else "\n")
         if output == "yaml": return yaml.safe_dump(value, sort_keys=False)
+        if output == "name":
+            rows = value.get("items", [value]) if isinstance(value, dict) else value
+            return "".join(r["kind"].lower()+"/"+r["metadata"]["name"]+"\n" for r in rows)
         if output == "tsv":
             rows = value if isinstance(value, list) else [value]
             return "".join("\t".join(str(v).lower() if isinstance(v,bool) else str(v) for v in (r.values() if isinstance(r,dict) else [r])) + "\n" for r in rows)
@@ -509,6 +518,9 @@ class World:
             action = command.split()[-1]
             principal = o.get("--assignee-object-id", o.get("--assignee", self.context["developer_object_id"]))
             scope = o.get("--scope")
+            if scope and scope not in {c["id"], c["id"]+"/managedNamespaces/retail", w["registry"]["id"], w["vault"]["id"],
+                                      "/subscriptions/00000000-0000-0000-0000-000000000001", "/subscriptions/00000000-0000-0000-0000-000000000001/resourceGroups/"+c["resourceGroup"]}:
+                raise WorldError("ResourceNotFound", "role assignment scope does not exist in this subscription", 404)
             if action == "list":
                 rows = [r for r in w["roles"] if (not ("--assignee" in o or "--assignee-object-id" in o) or r["principalId"] == principal)
                         and (scope is None or r["scope"] == scope or o.get("--include-inherited") and scope.startswith(r["scope"]))]
@@ -530,8 +542,11 @@ class World:
                 return None, []
         if command == "role definition list":
             return [{"roleName": name, "name": name} for name in ("AcrPull", "Container Registry Repository Reader", "Azure Kubernetes Service RBAC Reader", "Key Vault Secrets User")], []
-        if command in ("acr show", "acr list", "acr check-health"):
+        if command in ("acr show", "acr list"):
             return ([w["registry"]] if command.endswith("list") else w["registry"]), ["registry"]
+        if command == "acr check-health":
+            return {"loginEndpoint": "reachable", "dataEndpoint": "reachable" if w["nsg"]["securityRules"][0]["access"] == "Allow" else "TCP 443 timed out", "privateAddress": "10.0.2.5"}, []
+        if command == "acr private-endpoint-connection list": return w["registry"]["privateEndpointConnections"], []
         if command == "acr update":
             for flag, prop in (("--public-network-enabled", "publicNetworkAccess"), ("--admin-enabled", "adminUserEnabled"), ("--role-assignment-mode", "roleAssignmentMode")):
                 if flag in o: w["registry"][prop] = o[flag]
@@ -563,10 +578,18 @@ class World:
         if command in ("aks identity-binding show", "aks identity-binding list"):
             binding = w.get("identity_binding", {})
             return ([binding] if command.endswith("list") else binding), ["binding"]
-        if command in ("keyvault show", "keyvault secret show", "keyvault secret list-versions"):
+        if command in ("keyvault show", "keyvault secret show", "keyvault secret list-versions", "keyvault secret list"):
             if command == "keyvault show": return w["vault"], []
-            data = {"id": w["vault"]["id"] + "/secrets/app-key/version-2", "attributes": {"enabled": True}, "version": "version-2"}
-            return ([data] if command.endswith("list-versions") else data), ["secret_version"]
+            data = {"id": w["vault"]["properties"]["vaultUri"] + "secrets/backend-key/version-2", "name": "backend-key", "attributes": {"enabled": True}, "version": "version-2"}
+            return ([data] if command.endswith(("list-versions", "list")) else data), ["secret_version"]
+        if command in ("network vnet list", "network vnet show"):
+            row = {"name": c["name"]+"-vnet", "resourceGroup": "network-rg", "addressSpace": {"addressPrefixes": ["10.0.0.0/16"]}, "subnets": [{"name": "nodes", "addressPrefix": "10.0.1.0/24", "networkSecurityGroup": {"id": w["nsg"]["id"]}}]}
+            return ([row] if command.endswith("list") else row), []
+        if command in ("network private-endpoint list", "resource list"):
+            return [w["private_endpoint"]] if o.get("--resource-group", "network-rg") == "network-rg" else [], []
+        if command == "network dns zone list": return [], []
+        if command.startswith("network dns record-set "):
+            raise WorldError("ResourceNotFound", "public DNS zone is not managed in this resource group", 404)
         if command.startswith("network nsg "):
             rules = w["nsg"]["securityRules"]
             if command == "network nsg show": return w["nsg"], ["network_rules"]
@@ -718,6 +741,9 @@ class World:
         if not words: raise WorldError("ArgumentError", "kubectl command required", 0, 2)
         action = words[0]
         ns = o.get("--namespace", "retail")
+        if action == "auth" and words[1:] == ["can-i"] and o.get("--list"):
+            principal = o.get("--as", self.context["developer_object_id"])
+            return {"resourceRules": [{"resources": [r], "verbs": ["get", "list", "watch"]} for r in ("pods", "secrets") if self.namespace_access("list", r, ns, principal)]}, []
         if action == "config":
             if words[1:] == ["current-context"]: return self.cluster["name"], []
             return {"current-context": self.cluster["name"], "contexts": [{"name": self.cluster["name"], "context": {"namespace": ns, "user": self.context["developer_object_id"]}}]}, []
@@ -736,6 +762,8 @@ class World:
             content = self.stdin if filename == "-" else self.files.get(filename)
             if content is None: raise WorldError("ArgumentError", "manifest content was not uploaded by the container client", 0, 2)
             documents = list(yaml.safe_load_all(content))
+            if o.get("--dry-run") in ("client", "server"):
+                return {"kind": "List", "items": documents}, []
             changed = []
             for document in documents:
                 if document is None: continue
@@ -813,7 +841,10 @@ class World:
                 if not self.namespace_access("get" if name else "list", kinds[0], ns, principal):
                     tag = "access_secrets_deny" if kinds[0] == "secret" else "access_other_deny" if ns != "retail" else ""
                     raise WorldError("Forbidden", "authenticated principal is not authorized for this resource", 403, tags=(tag,) if tag else ())
-            selected = self.select(kinds, name, ns, o)
+            if action == "get" and len(references) > 2 and "/" not in ref:
+                selected = [r for item in references[1:] for r in self.select(kinds, item, ns, o)]
+                name = None
+            else: selected = self.select(kinds, name, ns, o)
             if not selected and name:
                 raise WorldError("NotFound", f"{ref} {name} not found", 404)
             tags = self.read_tags(selected)
@@ -899,6 +930,19 @@ class World:
                 raise WorldError("MockNotImplemented", "compound remote shell outside model", 0, 2)
             args = shlex.split(args[2])
         text = " ".join(args)
+        if args and args[0] == "/app/probe" and "--help" in args:
+            return "Usage: /app/probe --all (nonsecret health/configuration version). Configuration input: APP_CONFIG from Secret; no file-reload interface.", []
+        if args and args[0] == "ls" and args[-1] == "/app": return "probe\n", []
+        specialized = {"workload-federation-versus-rbac", "identity-binding-mixed-audiences", "csi-secret-sync-alias", "csi-rotation-consumption-mode"}
+        if args and args[0] == "/app/probe" and self.name not in specialized:
+            deployment = self.get("deployment", "api")
+            healthy = bool(deployment) and deployment.get("status", {}).get("readyReplicas", 0) == deployment["spec"].get("replicas", 1)
+            return {"healthy": healthy, "readyReplicas": deployment.get("status", {}).get("readyReplicas", 0) if deployment else 0}, ["workload"]
+        if any(a.startswith("http://api.retail.svc") for a in args) and self.name != "managed-namespace-selective-ingress":
+            deployment = self.get("deployment", "api")
+            if not deployment or not deployment.get("status", {}).get("readyReplicas"): raise WorldError("Unavailable", "no ready backend endpoints", 503, 22)
+            if not self.traffic(namespace): raise WorldError("ConnectionDenied", "network policy denied connection", 0, 28)
+            return "HTTP/1.1 200 OK", ["workload"]
         if self.name == "api-connectivity-stage-repair":
             if self.w["nsg"]["securityRules"][0]["access"] != "Allow":
                 raise WorldError("Timeout", "kubelet TCP 10250 path times out; API reads are working", 504)
@@ -924,6 +968,8 @@ class World:
         if self.name in ("csi-secret-sync-alias", "csi-rotation-consumption-mode"):
             if not args or args[0] != "/app/probe": raise WorldError("MockNotImplemented", "application command outside model", 0, 2)
             version = self.w["app_secret_version"] if self.name == "csi-rotation-consumption-mode" else "version-2" if self.get("secret", "app-secret") else None
+            spec = self.get("deployment", "api")["spec"]["template"]["spec"]
+            if not any(e.get("name") == "APP_CONFIG" and e.get("valueFrom", {}).get("secretKeyRef") == {"name": "app-secret", "key": "config"} for e in spec["containers"][0].get("env", [])): version = None
             return {"configurationVersion": version, "healthy": version == "version-2"}, ["app", "secret_version"]
         if self.name == "gateway-api-publish":
             urls = [urlparse(a) for a in args if a.startswith(("http://", "https://"))]

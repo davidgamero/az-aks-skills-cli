@@ -65,4 +65,21 @@ evaluation, not an efficacy estimate. No content benefit can be attributed to an
 unread skill. Other explicit model IDs and the optional Foundry provider remain
 available.
 
-Live results will be added after the frozen sweep and trace review.
+## First sweep and coverage corrections
+
+The first 34 trials used revision `5ef986f`, seed 19, and local raw directory
+`benchmark-results/candidates-sol-20261113`. Every candidate ran in both arms.
+No skill was read. The sweep exposed missing support for a public application
+probe, authorization listing and network inventory, plus incomplete CSI source
+metadata. These runs are retained; coverage gaps invalidate performance comparisons.
+
+Trace review also found that the simulator accepted a malformed role scope as a
+successful broad grant. That ACR baseline result must be treated as simulator-invalid,
+even though its original machine classification was valid. Corrections reject
+nonexistent scopes transactionally, implement dry-run without mutation and model
+template-triggered env refresh. The next revision also supplies CSI's actual
+application configuration contract and scopes temporary capacity approval to the
+PDB recovery task. Those fixture changes require new matched trials rather than
+rescoring old elapsed times.
+
+A second frozen sweep will be reported separately after trace review.

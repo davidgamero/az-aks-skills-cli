@@ -70,6 +70,14 @@ def make(name, seed, base):
          "safeguards": {"level": "Enforce", "excludedNamespaces": []},
          "maintenance": {}, "clock": "2026-11-15T01:30:00Z", "minimum_ready_seen": 2}
     c["_world"] = w
+    private_endpoint_id = f"/subscriptions/{subscription}/resourceGroups/network-rg/providers/Microsoft.Network/privateEndpoints/registry-private"
+    w["private_endpoint"] = {"id": private_endpoint_id, "name": "registry-private", "resourceGroup": "network-rg",
+        "type": "Microsoft.Network/privateEndpoints", "provisioningState": "Succeeded",
+        "customDnsConfigs": [{"fqdn": hostname, "ipAddresses": ["10.0.2.5"]} for hostname in [w["registry"]["loginServer"], *w["registry"]["dataEndpointHostNames"]]]}
+    w["registry"]["privateEndpointConnections"] = [{"name": "registry-private", "privateEndpoint": {"id": private_endpoint_id},
+        "privateLinkServiceConnectionState": {"status": "Approved"}}]
+    c["addonProfiles"] = {"azureKeyvaultSecretsProvider": {"enabled": True,
+        "config": {"enableSecretRotation": "true", "rotationPollInterval": "2m"}}}
     for namespace in (ns, "ingress", "other", "kube-system"):
         r = put(w, obj("Namespace", namespace, ""))
         r["metadata"].update(labels={"kubernetes.io/metadata.name": namespace, "team": namespace}, annotations={"owner": "platform"})
@@ -113,7 +121,8 @@ def make(name, seed, base):
     spc = put(w, obj("SecretProviderClass", "app-secrets", ns, {"provider": "azure", "parameters": {
         "keyvaultName": f"vault{suffix}", "clientID": "app-client", "objects": "array:\n  - |\n    objectName: backend-key\n    objectType: secret\n    objectAlias: app-key\n"},
         "secretObjects": [{"secretName": "app-secret", "type": "Opaque", "data": [{"key": "config", "objectName": "app-key"}]}]}))
-    put(w, obj("Secret", "app-secret", ns, data={"config": "c3ludGhldGljLXZlcnNpb24tMg=="}, type="Opaque"))
+    secret = put(w, obj("Secret", "app-secret", ns, data={"config": "c3ludGhldGljLXZlcnNpb24tMg=="}, type="Opaque"))
+    secret["metadata"]["annotations"] = {"source-version": "version-2", "managed-by": "secrets-store-csi"}
     context = {"cluster": c["name"], "resource_group": c["resourceGroup"], "namespace": ns, "deployment": "api",
         "developer_object_id": developer, "approved_namespace_scope": namespace_arm["id"], "registry": w["registry"]["name"],
         "registry_id": registry_id, "repository": "team/api", "approved_image": image, "identity": "app-id", "identity_resource_group": c["resourceGroup"],
@@ -155,6 +164,7 @@ def make(name, seed, base):
         c["nodeProvisioningProfile"] = {"mode": "Auto"}
         w["image_blocked"] = True  # Preserve the zero-disruption PDB; diagnose it, do not bypass it.
         context["operation_goal"] = "configure schedule and diagnose remaining replacement blocker"
+        context["approved_changes"] = "image maintenance schedule only; retain workload replica count and node/pod disruption budgets"
     if name == "automatic-admission-mutation-quota":
         c["sku"]["name"] = "Automatic"
         c["nodeProvisioningProfile"] = {"mode": "Auto"}
@@ -176,6 +186,10 @@ def make(name, seed, base):
         spc["spec"]["secretObjects"][0]["data"][0]["objectName"] = "app-key"
         w["rotation_interval"] = "2m"
         deployment["spec"]["template"]["spec"]["containers"][0]["env"].append({"name": "APP_CONFIG", "valueFrom": {"secretKeyRef": {"name": "app-secret", "key": "config"}}})
+        deployment["spec"]["template"]["spec"]["volumes"].append({"name": "secrets", "csi": {"driver": "secrets-store.csi.k8s.io", "volumeAttributes": {"secretProviderClass": "app-secrets"}}})
+        deployment["spec"]["template"]["spec"]["containers"][0]["volumeMounts"].append({"name": "secrets", "mountPath": "/mnt/secrets", "readOnly": True})
+        context["application_configuration"] = {"supported_input": "APP_CONFIG environment variable from app-secret/config", "supports_file_reload": False, "recovery_goal": "one-time refresh using the current application contract"}
+        put(w, obj("SecretProviderClassPodStatus", "api-0-app-secrets", ns, status={"mounted": True, "objects": [{"id": "secret/backend-key", "version": "version-2"}]}))
     if name == "overlay-cidr-exhaustion":
         c["networkProfile"]["podCidr"] = "10.244.0.0/22"
         w["overlay_pending"] = True
@@ -191,6 +205,8 @@ def make(name, seed, base):
         put(w, obj("HTTPRoute", "existing-route", ns, {"parentRefs": [{"name": "existing-gw"}], "hostnames": ["legacy.example.test"],
                "rules": [{"matches": [{"path": {"type": "PathPrefix", "value": "/old"}}], "backendRefs": [{"name": "api", "port": 8080}]}]}))
         context["existing_hostname"] = "legacy.example.test"
+    if name != "pdb-preserving-upgrade": context.pop("approved_temporary_replicas")
+    if name != "nap-capacity-control-plane": context.pop("approved_nap_cpu_ceiling")
     s.update(name=name, seed=seed, suite="candidate-v1", variant="primary", fault_model="bounded-stateful",
              context=context, candidate=DEFINITIONS[name], faults=[], responses=[])
     s["prompt"] = DEFINITIONS[name]["prompt"].format(namespace=ns, service="api", image=image, workload="api")

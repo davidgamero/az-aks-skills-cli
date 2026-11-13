@@ -159,3 +159,41 @@ class CandidateTests(unittest.TestCase):
         for candidate in NAMES:
             skill_id = make(candidate, 19)["candidate"]["proposed_skill_id"]
             self.assertEqual(sim.call(["aks", "skill", "show", "--name", skill_id])["exit_code"], 0, skill_id)
+
+    def test_public_application_probes_have_coverage_for_every_candidate(self):
+        for name in NAMES:
+            with self.subTest(name=name):
+                sim = self.simulator(name)
+                self.solve(sim)
+                result = execute(sim, kube("exec", "deployment/api", "--", "/app/probe", "--all"))
+                self.assertEqual(result["exit_code"], 0, result)
+                self.assertNotEqual(sim.events[-1]["category"], "coverage_gap")
+
+    def test_dry_run_does_not_mutate_and_template_rollout_refreshes_env(self):
+        sim = self.simulator("csi-rotation-consumption-mode")
+        document = copy.deepcopy(sim.scenario["expected"]["deployment"])
+        document["spec"]["template"]["metadata"]["annotations"] = {"refresh": "approved"}
+        before = sim.state_hash()
+        result = sim.call(["apply", "--dry-run=client", "-f", "-"], tool="kubectl", stdin=json.dumps(document))
+        self.assertEqual(result["exit_code"], 0)
+        self.assertEqual(before, sim.state_hash())
+        execute(sim, apply(document))
+        self.assertTrue(grade(sim.scenario, sim.state)["success"])
+
+    def test_invalid_role_scope_is_rejected_without_recording_grant(self):
+        sim = self.simulator("acr-abac-pull-repair")
+        action = commands(sim.scenario)[0]
+        action[action.index("--scope")+1] = "/subscriptions/not-a-subscription/resourceGroups/none"
+        before = sim.state_hash()
+        self.assertNotEqual(execute(sim, action)["exit_code"], 0)
+        self.assertEqual(before, sim.state_hash())
+        self.solve(sim)
+
+    def test_readonly_network_inventory_and_authorization_listing(self):
+        sim = self.simulator("acr-private-data-endpoint")
+        for args in (["network", "private-endpoint", "list", "-g", "network-rg"], ["network", "vnet", "list", "-g", "network-rg"],
+                     ["acr", "private-endpoint-connection", "list", "--registry-name", sim.scenario["context"]["registry"]],
+                     ["acr", "check-health", "--ignore-errors"]):
+            self.assertEqual(sim.call(args)["exit_code"], 0)
+        self.assertEqual(execute(sim, kube("auth", "can-i", "--list", "-n", "retail"))["exit_code"], 0)
+        self.assertEqual(execute(sim, kube("get", "namespace", "retail", "ingress", "other", "--show-labels"))["exit_code"], 0)
