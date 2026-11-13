@@ -132,7 +132,7 @@ needed. The included skills are small examples for exercising the interface.
 
 [`docs/benchmark.md`](docs/benchmark.md) describes the runnable skills-vs-no-skills
 experiment: stateful fake clusters, scripted success/errors across a captured
-99-command AKS registry, ten research-derived scenarios, rootless/Docker
+99-command AKS registry, 27 research-derived scenarios, rootless/Docker
 containers, timestamped call traces, state-based scoring, and model/network metrics.
 
 It uses your local Copilot CLI (`gpt-6.1-sol` by default), with model selection and
@@ -155,16 +155,23 @@ Microsoft Learn access for both arms. Use `--docs-mode off` for an offline compa
 The [discovery-only troubleshooting pilot](docs/troubleshooting-pilot.md) records
 valid matched pairs and the observed help-to-skill discovery path.
 
+The [17-candidate evaluation](docs/candidate-evaluation.md) adds namespace lifecycle,
+registry, identity, NAP, admission, PDB, CSI, networking and Gateway fixtures, with
+16 additional skills. It records **78 live trials** including coverage reruns.
+The latest audited pairs completed 16/17 baseline tasks and 17/17 skills-available
+tasks, with **zero skill reads**—no demonstrated skill-content benefit.
+
 ## Task-focused skill design
 
 The [skill coverage and tuning guide](docs/skill-catalog-tuning.md) explains the
-nine benchmark skills and the original-versus-revised content comparison.
+original nine benchmark skills and the original-versus-revised content comparison.
 The [discovery trace review](docs/skill-discovery-review.md) shows when the agent
 encounters the help entry, chooses a skill, or proceeds without one.
 The [observed task/action map](docs/task-action-skill-map.md) maps those reads to
 specific workflows. The [FAQ/guide candidate map](docs/scenario-candidate-map.md)
-adds 17 proposed benchmark tasks across eight topics, with a source index and
-machine-readable scenario designs.
+maps the 17 additional tasks across eight topics, with a source index and
+machine-readable scenario designs. Their primary fixtures are implemented;
+held-out variants remain future work. The benchmark catalog now has 25 skills.
 To inspect that catalog directly:
 
 ```sh
@@ -175,4 +182,4 @@ The standalone catalog also includes new skills for **ACR image pulls**,
 **workload identity**, and **PDB-blocked upgrades**. Their
 [Microsoft Learn research and scenario designs](docs/typical-aks-task-designs.md)
 specify success paths, failure branches, invariants and required simulator state.
-These three new workflows are designed but not yet modeled in the benchmark.
+Primary variants of all three workflows are now modeled in the candidate suite.

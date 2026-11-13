@@ -125,8 +125,9 @@ execute through a bounded host fetcher, with redirects confined to approved
 paths; it cannot reach ARM. Both arms have the same docs access. `--docs-mode off`
 disables it. Response bodies and hashes are retained locally for reproducibility.
 This is controlled documentation access, not an unrestricted browser/search engine.
-Native Copilot `web_fetch` is also supported: the container receives a public-IP
-hosts mapping for learn.microsoft.com and the proxy permits that exact host.
+Native Copilot `web_fetch` is also supported: the container receives public-IP
+hosts mappings for learn.microsoft.com and kubernetes.io and the proxy permits
+those exact hosts.
 This satisfies the tool's DNS validation before its proxied HTTPS fetch. Native
 web attempts/successes/failures are counted from CLI events, separately from curl
 HTTP counts; native TLS connections remain in the proxy trace. Native Learn

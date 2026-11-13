@@ -15,7 +15,7 @@ a PATH shim rather than an Azure CLI extension. Read `docs/design.md` first.
 The benchmark under `bench/` is separate from the passthrough shim. Read
 `docs/benchmark.md` before changing it. It must never delegate to real Azure.
 State, fixtures, scoring and authoritative traces stay outside agent containers.
-The benchmark alone depends on `bench/requirements.txt` (JMESPath).
+The benchmark alone depends on `bench/requirements.txt` (JMESPath and PyYAML).
 Run its tests with:
 `PYTHONPATH=bench .venv-bench/bin/python -m unittest discover -s bench/tests -v`.
 Keep replay evidence distinct from live model trials, and modeled API counts
