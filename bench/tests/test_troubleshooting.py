@@ -51,6 +51,9 @@ class FaultTests(unittest.TestCase):
         combined = sim.call(["get", "resourcequota,limitrange,pods", "-n", "retail", "-o", "wide"], tool="kubectl")
         self.assertEqual(combined["exit_code"], 0, combined)
         self.assertEqual(len(json.loads(combined["stdout"])["items"]), 3)
+        combined = sim.call(["-n", "retail", "get", "pods,replicasets,resourcequotas,limitranges"], tool="kubectl")
+        self.assertEqual(combined["exit_code"], 0, combined)
+        self.assertEqual(len(json.loads(combined["stdout"])["items"]), 4)
 
     def test_pdb_and_remote_node_inspection_are_bounded(self):
         sim = Simulator(make("debug-version-skew", 1), latency_scale=0)
@@ -60,6 +63,11 @@ class FaultTests(unittest.TestCase):
         pods = sim.call(["get", "pods", "--all-namespaces", "-o", "wide"], tool="kubectl")
         self.assertEqual(pods["exit_code"], 0, pods)
         self.assertEqual(len(json.loads(pods["stdout"])["items"]), 2)
+        ready = sim.call(["wait", "--for=condition=Ready", "nodes", "-l", "kubernetes.azure.com/agentpool=apps", "--timeout=300s"], tool="kubectl")
+        self.assertEqual(ready["exit_code"], 0, ready)
+        self.assertEqual(ready["stdout"].count("condition met"), 2)
+        missing = sim.call(["wait", "--for=condition=Ready", "nodes", "-l", "agentpool=missing"], tool="kubectl")
+        self.assertEqual(missing["exit_code"], 1)
         base = ["aks", "command", "invoke", "-g", "rg-dev-3201", "-n", "aks-dev-3201", "--command"]
         result = sim.call(base + ["kubectl get nodes -l agentpool=apps -o json"])
         self.assertEqual(result["exit_code"], 0, result)

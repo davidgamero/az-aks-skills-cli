@@ -155,6 +155,15 @@ def kubectl(cluster, argv, error):
         i += 1
     action = words[0]
     resource = words[1] if len(words) > 1 else ""
+    if action == "wait" and resource in ("node", "nodes") and opts.get("--for", "").lower() == "condition=ready":
+        index = argv.index("wait")
+        text, _ = kubectl(cluster, [*argv[:index], "get", *argv[index + 1:]], error)
+        nodes = json.loads(text)["items"]
+        if not nodes:
+            raise error("NotFound", "no nodes match the requested selector", 404)
+        if not all(any(c["type"] == "Ready" and c["status"] == "True" for c in node["status"]["conditions"]) for node in nodes):
+            raise error("Timeout", "nodes are not ready", 408)
+        return "".join(f"node/{node['metadata']['name']} condition met\n" for node in nodes), True
     if action in ("get", "describe") and resource in ("pdb", "poddisruptionbudget", "poddisruptionbudgets"):
         return '{"apiVersion":"v1","kind":"List","items":[]}\n', False
     if action in ("get", "describe") and "_workload" not in cluster and resource in ("pods", "pod", "events", "event"):
@@ -200,7 +209,7 @@ def kubectl(cluster, argv, error):
         w["replicas"] = int(opts.get("--replicas", w["replicas"]))
         reconcile(cluster)
         return "deployment.apps/api scaled\n", False
-    if action == "rollout" and resource == "status":
+    if (action == "rollout" and resource == "status") or (action == "wait" and resource in ("deployment", "deployments") and opts.get("--for", "").lower() == "condition=available"):
         if w["ready"] != w["replicas"]:
             raise error("ProgressDeadlineExceeded", problem, 400)
         return 'deployment "api" successfully rolled out\n', True
@@ -217,6 +226,12 @@ def kubectl(cluster, argv, error):
                 "spec": {"hard": {"requests.cpu": quota["cpuRequest"], "limits.cpu": quota["cpuLimit"], "requests.memory": quota["memoryRequest"], "limits.memory": quota["memoryLimit"]}},
                 "status": {"used": {"requests.cpu": str(w["ready"])}, "hard": {"requests.cpu": quota["cpuRequest"]}}}
         verify = False
+    elif resource in ("replicaset", "replicasets", "rs"):
+        data = {"apiVersion": "apps/v1", "kind": "ReplicaSet", "metadata": {"name": "api-fixture", "namespace": "retail",
+                "ownerReferences": [{"kind": "Deployment", "name": "api"}]}, "spec": {"replicas": w["replicas"]},
+                "status": {"replicas": w["ready"], "readyReplicas": w["ready"], "availableReplicas": w["ready"],
+                           "conditions": [] if w["ready"] == w["replicas"] else [{"type": "ReplicaFailure", "status": "True", "reason": "FailedCreate", "message": problem}]}}
+        verify = True
     elif resource in ("events", "event"):
         data = {"items": [] if w["ready"] == w["replicas"] else [{"reason": "FailedCreate", "message": problem}]}
         verify = False
