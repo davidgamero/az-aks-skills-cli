@@ -59,7 +59,7 @@ the agent container.
 ### Scoring
 
 The agent writes `/work/diagnosis.json`: cause, target, time window, exact command
-citations with verbatim excerpts, competing explanations and recommended action.
+citations with excerpts, competing explanations and recommended action.
 The host checks these against host-recorded responses and independent fixture
 expectations. A correct label with no collected/cited evidence fails. Current-only
 or wrong-peer telemetry cannot establish the historical memory incident. Reads
@@ -71,7 +71,10 @@ Supplementary citations to local transformations (for example `date` converting 
 metric timestamp) are reported as unverified and earn no decisive-source credit.
 All cited az/kubectl/curl excerpts must match retained responses, including ordinary
 nondecisive reads. Alternative labels and the recommendation action are checked; the prose explaining
-them still needs trace review. Exact-citation failures must be distinguished from
+them still needs trace review. Whitespace-only changes, recorded `&&` command
+batches and two lossless Azure-metrics display projections are accepted. Submitted
+shell/Python/jq formatter code is never executed by the grader. Unsupported local
+transformations receive no source credit. Citation failures must be distinguished from
 wrong diagnoses in the report. Diagnosis-file completion is measured at process
 exit, not asserted as a precisely observed earlier root-cause timestamp.
 
@@ -80,6 +83,12 @@ not real packet capture, a complete PromQL engine, GPU execution, Azure capacity
 or a controller implementation. The seven faults are development variants, not
 held-out evidence of broad generalization. A missing operation produces a coverage
 gap; such trials are retained and excluded from performance claims.
+
+The plugin case deliberately lacks historical proof of when the current selector
+mismatch began. Its supported outcome is `supported_candidate_with_evidence_gap`:
+identify the current device-plugin problem, cite ownership/node/component evidence,
+and retain `unconfirmed` confidence for the historical incident. This is separate
+from six confirmed diagnoses; a current mismatch alone does not establish a past cause.
 
 ## Discovery experiment
 
@@ -153,3 +162,13 @@ read-only diagnostic utilities, and make Pending GPU/KAITO data consistent: no
 crash logs or memory telemetry for a container that never started. Those changes
 require a new frozen run. The first run remains intact rather than being presented
 as model failures or having elapsed times silently rescored.
+
+The second 21-trial run at `4636539` is preserved under
+`benchmark-results/investigation-discovery-v2-20261113`. It produced three
+contextual skill reads and no help-only reads. All seven baselines named the
+intended cause, although the plugin diagnosis appropriately remained unconfirmed.
+Two trials had coverage gaps. Several other failures were rubric artifacts:
+authentic command batches, lossless metrics formatting and JSON indentation were
+rejected. The next scoring revision explicitly handles these representations and
+the plugin's historical evidence gap. These failures are not evidence that skills
+are needed to diagnose the fixtures; the current evidence primarily tests retrieval.

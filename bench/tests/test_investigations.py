@@ -134,3 +134,26 @@ class InvestigationTests(unittest.TestCase):
             self.assertEqual(r["exit_code"],1);self.assertNotEqual(sim.events[-1]["category"],"coverage_gap")
             q=next(c for c in commands(sim.scenario) if isinstance(c,dict) and c.get("tool")=="curl")
             r=execute(sim,q);self.assertEqual(json.loads(r["stdout"])["data"]["result"],[])
+
+    def test_compound_and_lossless_metrics_citations_without_execution(self):
+        from aks_bench.investigation_citations import verify,projections
+        sim=self.sim(NAMES[0]);self.solve(sim)
+        observations=sim.state["_incident_observations"]
+        import shlex
+        first,second=observations[:2]
+        citation={"command":shlex.join([first["tool"],*first["argv"]])+" && "+shlex.join([second["tool"],*second["argv"]]),
+            "quote":first["stdout"]+second["stdout"]}
+        self.assertTrue(verify(citation,observations)[0])
+        metrics=next(e for e in observations if "snat_usage" in e["signals"])
+        for projection in projections(metrics)[1:]:
+            citation={"command":shlex.join([metrics["tool"],*metrics["argv"]])+" | python3 -c 'raise RuntimeError(\"never execute\")'", "quote":projection}
+            authentic,tags,_=verify(citation,observations)
+            self.assertTrue(authentic);self.assertIn("snat_usage",tags)
+            citation["quote"]=projection.replace("420","999999")
+            self.assertFalse(verify(citation,observations)[0])
+
+    def test_plugin_historical_uncertainty_is_not_penalized_as_wrong_cause(self):
+        sim=self.sim("gpu-incident-plugin");self.solve(sim)
+        self.assertEqual(grade(sim.scenario,sim.state)["outcome_kind"],"supported_candidate_with_evidence_gap")
+        sim.state["_incident_report"]["confidence"]="confirmed"
+        self.assertFalse(grade(sim.scenario,sim.state)["checks"]["confidence_supported"])

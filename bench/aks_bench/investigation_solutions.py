@@ -34,4 +34,4 @@ def report(s,state):
     oracle=s["investigation"]["oracle"];x=s["context"]
     return {"diagnosis":oracle["cause"],"scope":{k:x[k] for k in ("cluster","namespace","pod","node")},
         "incident_window":x["incident_window"],"evidence":[{"command":shlex.join([e["tool"],*e["argv"]]),"quote":e["stdout"].strip()} for e in state.get("_incident_observations",[])],
-        "alternatives":[v for v in CAUSES if v!=oracle["cause"]][:2],"recommendation":{"action":oracle["action"],"reason":"Supported by correlated incident evidence."},"confidence":"confirmed"}
+        "alternatives":[v for v in CAUSES if v!=oracle["cause"]][:2],"recommendation":{"action":oracle["action"],"reason":"Supported by correlated incident evidence."},"confidence":oracle["accepted_confidence"][0]}

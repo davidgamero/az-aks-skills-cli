@@ -59,11 +59,12 @@ class Evidence:
             if not requested: raise WorldError("ArgumentError","--metric required",0,2)
             rows=[];signal={};historical=self.window(o)
             for name in requested:
-                if name not in ("UsedSnatPorts","AllocatedSnatPorts","SnatConnectionCount"): raise WorldError("MockNotImplemented","metric outside fixture",0,2)
+                if name=="DroppedPackets": raise WorldError("BadRequest","metric not found in this resource's metric definitions: "+name,400)
+                if name not in ("UsedSnatPorts","AllocatedSnatPorts","SnatConnectionCount"): raise WorldError("MockNotImplemented","metric outside fixture: "+name,0,2)
                 value={"UsedSnatPorts":self.f["used_snat"] if historical else 60,"AllocatedSnatPorts":self.f["allocated_snat"],"SnatConnectionCount":self.f["failed_snat"] if historical else 0}[name]
                 rows.append({"name":{"value":name},"timeseries":[{"metadatavalues":[{"name":{"value":"Node"},"value":self.x["node"]},*([{"name":{"value":"ConnectionState"},"value":"Failed"}] if name=="SnatConnectionCount" else [])],
                     "data":[{"timeStamp":"2026-11-13T10:04:00Z" if historical else self.x["current_time"],"maximum":value,"total":value}]}]})
-                signal[{"UsedSnatPorts":"snat_usage","AllocatedSnatPorts":"snat_allocation","SnatConnectionCount":"snat_failures"}[name]]=[f'"maximum": {value}',f'"total": {value}']
+                signal[{"UsedSnatPorts":"snat_usage","AllocatedSnatPorts":"snat_allocation","SnatConnectionCount":"snat_failures"}[name]]=[f'"maximum": {value}',f'"total": {value}',f'maximum={value}',f'total={value}']
             return {"value":rows},signal if historical else {}
         if command in ("network lb show","network lb outbound-rule list"):
             value={"id":self.x["evidence_sources"]["load_balancer_id"],"name":"kubernetes","outboundRules":[{"name":"aksOutboundRule","allocatedOutboundPorts":1024,"protocol":"All","idleTimeoutInMinutes":4}]}
@@ -119,6 +120,7 @@ class Evidence:
                 if any(c in tail[2] for c in ("|","&&","$(","`")): raise WorldError("MockNotImplemented","compound remote shell outside fixture",0,2)
                 tail=shlex.split(tail[2])
             text=" ".join(tail)
+            if tail and tail[0]=="ls" and tail[-1]=="/var/log": return "journal\ncontainers\npods\n",{}
             if text=="cat /etc/resolv.conf": return "nameserver 169.254.10.10\nsearch "+ns+".svc.cluster.local svc.cluster.local\noptions ndots:5",{}
             if tail[:2]==["getent","hosts"] and tail[-1]=="payments.example.test": return "203.0.113.20 payments.example.test",{}
             if tail and tail[0]=="cat" and all(p in ("/sys/fs/cgroup/memory.max","/sys/fs/cgroup/memory.events","/proc/meminfo") for p in tail[1:]):
