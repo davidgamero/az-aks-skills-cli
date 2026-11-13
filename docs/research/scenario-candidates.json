@@ -2,7 +2,7 @@
   "schema_version": 1,
   "reviewed_on": "2026-11-13",
   "source_index": "aks-source-index.json",
-  "status": "Research designs only; these candidates are not registered benchmark scenarios.",
+  "status": "All 17 registered as candidate-v1 primary fixtures. Held-out variants remain research designs. See docs/candidate-evaluation.md for build scope and live evidence.",
   "priority_meaning": "P1 is a proposed first implementation/evaluation wave; P2 is a follow-up or contract-validation wave. Priority is a hypothesis, not measured skill efficacy or production frequency.",
   "common_evaluation": {
     "prompt_policy": "Identical natural task prompts; no mention of skills or instruction to seek a particular source.",

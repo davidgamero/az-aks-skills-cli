@@ -13,9 +13,10 @@
 - [Observed task/action map](task-action-skill-map.md): what has actually led to
   skill reads in the existing experiments.
 
-These are research designs, not additional implemented scenarios or measured
-speedups. The runnable matrix still has its existing ten tasks. Priorities below
-are proposed evaluation order, not claims about production frequency or efficacy.
+All 17 now have bounded primary fixtures, bringing the runnable matrix to 27 tasks.
+The held-out variants below remain research designs. See
+[candidate evaluation](candidate-evaluation.md) for implementation limits and live
+evidence. Priorities are hypotheses, not production frequency or measured efficacy.
 
 ## Why these candidates are stronger tests
 

@@ -12,11 +12,13 @@ NAMESPACE_CONCEPTS_URL = "https://learn.microsoft.com/en-us/azure/aks/concepts-m
 
 
 def approved(url):
-    parsed = urlparse(url)
-    return (parsed.scheme == "https" and parsed.hostname == "learn.microsoft.com"
-            and parsed.port in (None, 443) and not parsed.username and not parsed.password
-            and (parsed.path.startswith(("/en-us/azure/", "/en-us/troubleshoot/azure/", "/en-us/cli/azure/"))
-                 or parsed.path == "/api/search"))
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme != "https" or parsed.port not in (None, 443) or parsed.username or parsed.password: return False
+        if parsed.hostname == "kubernetes.io": return parsed.path.startswith("/docs/")
+        return parsed.hostname == "learn.microsoft.com" and (parsed.path.startswith(("/en-us/azure/", "/en-us/troubleshoot/azure/", "/en-us/cli/azure/", "/en-us/entra/", "/en-us/rest/api/", "/en-us/python/api/")) or parsed.path == "/api/search")
+    except ValueError:
+        return False
 
 
 class RestrictedRedirect(HTTPRedirectHandler):

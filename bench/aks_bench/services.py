@@ -18,8 +18,8 @@ class MockHandler(socketserver.StreamRequestHandler):
     def handle(self):
         self.request.settimeout(30)
         try:
-            data = self.rfile.readline(65537)
-            if len(data) > 65536:
+            data = self.rfile.readline(4 * 1024 * 1024 + 1)
+            if len(data) > 4 * 1024 * 1024:
                 raise ValueError("request too large")
             request = json.loads(data)
             args = request["argv"]
@@ -28,7 +28,11 @@ class MockHandler(socketserver.StreamRequestHandler):
             tool = request.get("tool", "az")
             if tool not in ("az", "kubectl", "curl"):
                 raise ValueError("unsupported tool")
-            response = self.server.simulator.call(args, tool=tool)
+            files, stdin = request.get("files", {}), request.get("stdin")
+            if not isinstance(files, dict) or not all(isinstance(k, str) and isinstance(v, str) for k,v in files.items()):
+                raise ValueError("files must map paths to text")
+            if stdin is not None and not isinstance(stdin, str): raise ValueError("stdin must be text")
+            response = self.server.simulator.call(args, tool=tool, files=files, stdin=stdin)
         except (ValueError, KeyError) as error:
             response = {"stdout": "", "stderr": f"invalid mock request: {error}\n", "exit_code": 2}
         self.wfile.write(json.dumps(response).encode() + b"\n")

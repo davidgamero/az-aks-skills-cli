@@ -23,6 +23,7 @@ from .services import Services
 from . import automatic
 from . import troubleshooting
 from . import catalogs
+from . import candidate_fixtures, candidate_solutions
 
 COPILOT_HOSTS = {"api.github.com", "api.githubcopilot.com", "api.individual.githubcopilot.com",
                  "api.business.githubcopilot.com", "api.enterprise.githubcopilot.com",
@@ -69,7 +70,7 @@ def provider_environment(provider, gh_user=None):
     return env, hosts
 
 
-def container_command(engine, bwrap, copilot, sockets, artifacts, entry_args, env, name):
+def container_command(engine, bwrap, copilot, sockets, artifacts, entry_args, env, name, workspace=None):
     client = ROOT / "container"
     if engine == "bwrap":
         command = [bwrap, "--die-with-parent", "--new-session", "--unshare-all", "--cap-drop", "ALL",
@@ -85,18 +86,23 @@ def container_command(engine, bwrap, copilot, sockets, artifacts, entry_args, en
                    "--bind", str(artifacts), "/results", "--chdir", "/work"]
         if (sockets / "hosts").exists():
             command.extend(["--ro-bind", str(sockets / "hosts"), "/etc/hosts"])
+        if workspace is not None:
+            command.extend(["--bind", str(workspace), "/work"])
         command.extend(["--", "/usr/bin/python3", "/opt/client/entry.py", *entry_args])
     else:
         command = ["docker", "run", "--rm", "--name", name, "--network", "none", "--read-only",
                    "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit", "128",
                    "--memory", "2g", "--cpus", "2", "--user", f"{os.getuid()}:{os.getgid()}",
                    "--tmpfs", "/tmp:rw,nosuid,nodev,size=256m", "--tmpfs", "/home:rw,nosuid,nodev,size=256m",
-                   "--tmpfs", "/work:rw,nosuid,nodev,size=128m",
                    "--mount", f"type=bind,src={copilot},dst=/opt/copilot,readonly",
                    "--mount", f"type=bind,src={sockets},dst=/run/bench,readonly",
                    "--mount", f"type=bind,src={artifacts},dst=/results"]
         for key in env:
             command.extend(["--env", key])
+        if workspace is None:
+            command.extend(["--tmpfs", "/work:rw,nosuid,nodev,size=128m"])
+        else:
+            command.extend(["--mount", f"type=bind,src={workspace},dst=/work"])
         if (sockets / "hosts").exists():
             command.extend(["--mount", f"type=bind,src={sockets / 'hosts'},dst=/etc/hosts,readonly"])
         command.extend(["az-aks-bench:local", *entry_args])
@@ -105,13 +111,16 @@ def container_command(engine, bwrap, copilot, sockets, artifacts, entry_args, en
 
 def documentation_network(sockets, env, hosts):
     """Native web_fetch validates DNS before using HTTPS_PROXY; supply only Learn."""
-    addresses = socket.getaddrinfo("learn.microsoft.com", 443, family=socket.AF_INET, type=socket.SOCK_STREAM)
-    ip = addresses[0][4][0]
-    if not ipaddress.ip_address(ip).is_global:
-        raise ValueError("Microsoft Learn must resolve to a public address")
-    (Path(sockets) / "hosts").write_text(f"127.0.0.1 localhost\n{ip} learn.microsoft.com\n")
+    mappings = ["127.0.0.1 localhost"]
+    for hostname in ("learn.microsoft.com", "kubernetes.io"):
+        addresses = socket.getaddrinfo(hostname, 443, family=socket.AF_INET, type=socket.SOCK_STREAM)
+        ip = addresses[0][4][0]
+        if not ipaddress.ip_address(ip).is_global:
+            raise ValueError("documentation hosts must resolve to public addresses")
+        mappings.append(f"{ip} {hostname}")
+    (Path(sockets) / "hosts").write_text("\n".join(mappings)+"\n")
     env["AKS_BENCH_DOCS_MODE"] = "live"
-    return set(hosts) | {"learn.microsoft.com"}
+    return set(hosts) | {"learn.microsoft.com", "kubernetes.io"}
 
 
 def native_web_usage(path):
@@ -134,7 +143,7 @@ def native_web_usage(path):
         successes += result.get("success") is True
         message = result.get("error", {}).get("message", "").lower()
         url = call.get("arguments", {}).get("url", "")
-        if url.startswith("https://learn.microsoft.com/") and any(
+        if url.startswith(("https://learn.microsoft.com/", "https://kubernetes.io/docs/")) and any(
             text in message for text in ("failed to lookup address", "network is unreachable", "temporary failure in name resolution")
         ):
             transport_failures += 1
@@ -175,6 +184,8 @@ def telemetry(path):
 
 
 def oracle_commands(scenario):
+    if scenario.get("suite") == "candidate-v1":
+        return candidate_solutions.commands(scenario)
     if scenario["name"] in troubleshooting.NAMES:
         return troubleshooting.oracle_commands(scenario)
     if scenario["name"] in automatic.NAMES:
@@ -203,9 +214,16 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
     directory.mkdir(parents=True, exist_ok=False)
     artifacts = directory / "agent"
     artifacts.mkdir()
+    workspace = directory / "workspace"
+    workspace.mkdir()
     scenario = make(scenario_name, seed)
     if args.fixture:
         scenario = json.loads(Path(args.fixture).read_text())
+    for filename, content in scenario.get("workspace_files", {}).items():
+        target = (workspace / filename).resolve()
+        if not target.is_relative_to(workspace.resolve()): raise ValueError("workspace file escapes trial directory")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(content)
     sim = Simulator(scenario, skills=skills, log_path=directory / "az-events.jsonl", latency_scale=args.latency_scale,
                     docs_mode=getattr(args, "docs_mode", "off"), skills_dir=getattr(args, "skills_dir", None))
     prompt = scenario["prompt"]
@@ -216,10 +234,11 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
         if skills:
             sim.call(["aks", "skill", "list", "-o", "json"])
         for command in oracle_commands(scenario):
-            response = sim.call(command["argv"], tool=command["tool"]) if isinstance(command, dict) else sim.call(command)
+            response = candidate_solutions.execute(sim, command)
             if response["exit_code"] and "TooManyRequests" in response["stderr"]:
                 response = sim.call(command)
-            if response["exit_code"]:
+            expected_exit = command.get("expect_exit", 0) if isinstance(command, dict) else 0
+            if response["exit_code"] != expected_exit:
                 raise RuntimeError(response["stderr"])
         elapsed, returncode, timeout = time.monotonic() - start, 0, False
         isolation = None
@@ -238,7 +257,7 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
                 env["AKS_BENCH_DOCS_MODE"] = "off"
             with Services(sockets, sim, hosts, directory / "proxy-events.jsonl"):
                 name = "aks-bench-" + os.urandom(5).hex()
-                command = container_command(args.engine, args.bwrap, Path(args.copilot).resolve(), Path(sockets), artifacts.resolve(), entry, env, name)
+                command = container_command(args.engine, args.bwrap, Path(args.copilot).resolve(), Path(sockets), artifacts.resolve(), entry, env, name, workspace.resolve())
                 start = time.monotonic()
                 sim.started = start
                 timeout = False
@@ -257,6 +276,10 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
         isolation = json.loads(isolation_path.read_text()) if isolation_path.exists() else {}
     sim.advance()
     state_grade = grade(scenario, sim.state)
+    final_verified = sim.verified_goal_s is not None
+    if scenario.get("suite") == "candidate-v1":
+        from .candidate_oracles import verified
+        final_verified = verified(scenario, sim.state)
     unsupported = sum(e["category"] == "coverage_gap" for e in sim.events)
     result = {"scenario": scenario["name"], "seed": seed, "skills": skills,
               "condition": getattr(args, "condition", "skills" if skills else "baseline"),
@@ -266,7 +289,8 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
               "elapsed_s": elapsed, "time_to_goal_s": sim.first_goal_s,
               "time_to_verified_goal_s": sim.verified_goal_s, "timed_out": timeout,
               "agent_exit_code": returncode, "state_grade": state_grade,
-              "success": state_grade["success"] and sim.verified_goal_s is not None and returncode == 0 and not timeout,
+              "success": state_grade["success"] and final_verified and returncode == 0 and not timeout,
+              "final_verification_complete": final_verified,
               "coverage_gaps": unsupported, "isolation": isolation,
               "valid_trial": mode == "live" and bool(isolation) and all(isolation.values()) and not unsupported,
               "tool_calls": len(sim.events), "az_calls": sum(e.get("tool", "az") == "az" for e in sim.events),

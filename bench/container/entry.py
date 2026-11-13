@@ -74,9 +74,10 @@ def main():
                 tool, arguments = (args["tool"], args["argv"]) if isinstance(args, dict) else ("az", args)
                 if tool not in ("az", "kubectl", "curl"):
                     raise ValueError("unsupported replay tool")
-                result = subprocess.run([tool, *arguments])
-                if result.returncode:
-                    return result.returncode
+                result = subprocess.run([tool, *arguments], input=args.get("stdin") if isinstance(args, dict) else None, text=True)
+                expected_exit = args.get("expect_exit", 0) if isinstance(args, dict) else 0
+                if result.returncode != expected_exit:
+                    return result.returncode or 1
             return 0
         env = os.environ.copy()
         env.update(HTTPS_PROXY="http://127.0.0.1:18080", HTTP_PROXY="http://127.0.0.1:18080",
@@ -92,6 +93,7 @@ def main():
                    "--secret-env-vars=COPILOT_GITHUB_TOKEN,COPILOT_PROVIDER_API_KEY,COPILOT_PROVIDER_BEARER_TOKEN"]
         if env.get("AKS_BENCH_DOCS_MODE") == "live":
             command.append("--allow-url=https://learn.microsoft.com")
+            command.append("--allow-url=https://kubernetes.io")
         else:
             command.append("--excluded-tools=web_fetch")
         Path("/results/agent-start.json").write_text(json.dumps({"time": time.time()}))

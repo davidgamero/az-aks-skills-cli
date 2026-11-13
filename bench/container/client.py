@@ -24,17 +24,31 @@ def write_kubeconfig(content, argv):
 
 def main(tool="az"):
     try:
+        files = {}
+        stdin = None
+        if tool == "kubectl":
+            for index, arg in enumerate(sys.argv[1:], 1):
+                option, eq, value = arg.partition("=")
+                if option in ("-f", "--file", "--filename", "--patch-file"):
+                    value = value if eq else sys.argv[index + 1]
+                    if value == "-":
+                        stdin = sys.stdin.read(2 * 1024 * 1024 + 1)
+                        if len(stdin.encode()) > 2 * 1024 * 1024: raise ValueError("manifest exceeds 2 MiB")
+                    elif not value.startswith(("http://", "https://")):
+                        content = Path(value).read_text()
+                        if len(content.encode()) > 2 * 1024 * 1024: raise ValueError("manifest exceeds 2 MiB")
+                        files[value] = content
         with socket.socket(socket.AF_UNIX) as connection:
             connection.settimeout(120)
             connection.connect("/run/bench/az.sock")
-            connection.sendall(json.dumps({"argv": sys.argv[1:], "tool": tool}).encode() + b"\n")
+            connection.sendall(json.dumps({"argv": sys.argv[1:], "tool": tool, "files": files, "stdin": stdin}).encode() + b"\n")
             response = json.loads(connection.makefile("rb").readline())
         sys.stdout.write(response["stdout"])
         sys.stderr.write(response["stderr"])
         if response["exit_code"] == 0 and "kubeconfig" in response:
             write_kubeconfig(response["kubeconfig"], sys.argv[1:])
         return response["exit_code"]
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, IndexError) as error:
         print(f"mock az unavailable: {error}", file=sys.stderr)
         return 125
 

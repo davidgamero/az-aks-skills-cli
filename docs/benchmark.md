@@ -69,6 +69,12 @@ The benchmark catalog is in `bench/skills/`. It contains no seeded names, task
 answers, or scoring rules. The production demonstration catalog in `skills/`
 remains separate from this versioned experimental input.
 
+The [candidate evaluation](candidate-evaluation.md) adds 17 bounded primary
+fixtures and 16 procedures, bringing the matrix to 27 tasks and 25 benchmark
+skills. Its scope and limitations supplement the original ten-scenario model
+described below. The benchmark now also depends on pinned PyYAML for uploaded
+manifests; the passthrough shim remains dependency-free.
+
 ## Architecture and isolation
 
 ```text
@@ -87,7 +93,8 @@ allowlisted HTTPS CONNECT proxy <--- Unix socket <--- loopback proxy <--- model 
 
 The mock service lives **outside** the container. The agent cannot read expected
 answers, rewrite the state, or edit the authoritative trace. It sees only the
-normal task prompt, command responses and an initially empty `/work` directory.
+normal task prompt, command responses and public starting files under `/work`
+(empty for the original scenarios).
 The agent can inspect the thin client, but that client contains only the RPC
 transport. This is a CLI-use experiment; direct socket requests are equivalent
 mock calls and still logged and graded.
@@ -112,7 +119,8 @@ The Foundry allowlist contains only the configured inference host. Private/VNet
 Foundry endpoints are not currently supported by the public-address check.
 
 A separate logged `curl` client provides live GET-only access to approved
-Microsoft Learn documentation paths and its public search endpoint. Requests
+Microsoft Learn documentation paths, its public search endpoint and Kubernetes
+`/docs/` pages. Requests
 execute through a bounded host fetcher, with redirects confined to approved
 paths; it cannot reach ARM. Both arms have the same docs access. `--docs-mode off`
 disables it. Response bodies and hashes are retained locally for reproducibility.
@@ -384,8 +392,6 @@ to Azure end-to-end deployment time. The baseline has CLI help and model knowled
 but no arbitrary web access. Compare observed controlled Microsoft Learn lookups
 with skill reads; do not infer avoided browsing if the baseline never fetches docs.
 
-Next coverage increments should be driven by observed gaps: node-image upgrades,
-quota/capacity errors, add-on identity/permission failures, maintenance windows,
-and read-only pod diagnostics. The current fake kubectl covers only the managed
-quota rollout scenario; other Kubernetes tasks need additional state modeling. Preserve
-old trials and use new output directories when changing skills or CLI affordances.
+Next coverage increments should be driven by observed gaps and the unimplemented
+held-out candidate variants. Preserve old trials and use new output directories
+when changing skills or CLI affordances.

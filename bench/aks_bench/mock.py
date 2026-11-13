@@ -133,7 +133,11 @@ class Simulator:
         self.docs_mode = docs_mode
 
     def state_hash(self):
-        return hashlib.sha256(json.dumps({"clusters": self.state["clusters"], "providers": self.state.get("providers")}, sort_keys=True).encode()).hexdigest()
+        clusters = copy.deepcopy(self.state["clusters"])
+        for cluster in clusters:
+            if "_world" in cluster:
+                for field in ("observations", "probe_history", "generation"): cluster["_world"].pop(field, None)
+        return hashlib.sha256(json.dumps({"clusters": clusters, "providers": self.state.get("providers")}, sort_keys=True).encode()).hexdigest()
 
     def advance(self):
         now = time.monotonic()
@@ -145,7 +149,9 @@ class Simulator:
                 remaining.append(operation)
         self.state["pending"] = remaining
 
-    def call(self, argv, tool="az"):
+    def call(self, argv, tool="az", files=None, stdin=None):
+        if self.scenario.get("suite") == "candidate-v1":
+            return self.candidate_call(argv, tool, files, stdin)
         if tool != "az":
             return self.external_call(tool, argv)
         with self.lock:
@@ -289,6 +295,72 @@ class Simulator:
                     stream.write(json.dumps(event) + "\n")
             return response
 
+    def candidate_call(self, argv, tool, files, stdin):
+        from .candidate_runtime import World, WorldError, parse as world_parse
+        from .candidate_oracles import verified
+        if tool == "curl" and any(documentation.approved(a) for a in argv if a.startswith("https://")):
+            return self.external_call(tool, argv)
+        with self.lock:
+            start = time.monotonic()
+            before = self.state_hash()
+            event = {"sequence": len(self.events)+1, "started_at": time.time(), "start_s": start-self.started,
+                     "argv": argv, "tool": tool, "command": "", "category": "azure" if tool == "az" else "kubernetes",
+                     "modeled_api_requests": 1 if tool == "az" else 0, "modeled_kubernetes_requests": 1 if tool == "kubectl" else 0}
+            try:
+                words, options, tail = world_parse(argv, tool) if tool != "curl" else (["curl"], {}, [])
+                command = " ".join(words)
+                event["command"] = command
+                if tool == "az" and len(argv) >= 2 and argv[0] == "aks" and argv[1] in ("skill", "skills"):
+                    event.update(category="skill", modeled_api_requests=0, command=" ".join(["aks", "skill", *argv[2:3]]))
+                    if not self.skills: raise WorldError("CommandNotFound", "skill command unavailable", 0, 2)
+                    result = subprocess.run([sys.executable, str(ROOT.parent / "bin/az"), *argv], capture_output=True, text=True,
+                                            env={**os.environ, "AZ_AKS_SKILLS_DIR": str(self.skills_dir)}, timeout=10)
+                    response = {"stdout": result.stdout, "stderr": result.stderr, "exit_code": result.returncode}
+                elif options.get("--help", options.get("-h")) or not words:
+                    text = self.help(command) if tool == "az" else "kubectl get/describe/apply/patch/delete/scale/rollout/auth/exec; use -n for namespace, -f for manifests, -o json or yaml.\n"
+                    response = {"stdout": text, "stderr": "", "exit_code": 0}
+                    event.update(category="local", modeled_api_requests=0, modeled_kubernetes_requests=0)
+                else:
+                    time.sleep(self.scenario.get("latency_ms", 0) / 1000 * self.latency_scale)
+                    world = World(self.scenario, self.state)
+                    response = world.invoke(tool, argv, files, stdin)
+                    if response.pop("_changed", False):
+                        if tool == "az": event["modeled_api_requests"] += 2
+                        time.sleep(self.scenario.get("operation_delay_ms", 0) / 1000 * self.latency_scale)
+                    event["http_status"] = response.pop("_status", None)
+                    error = response.pop("_error", None)
+                    if error:
+                        event["error_code"] = error
+                        if error.startswith("Mock"): event.update(category="coverage_gap", modeled_api_requests=0, modeled_kubernetes_requests=0)
+                    response.pop("_tags", None); response.pop("_command", None)
+                    if command in ("aks get-credentials", "aks namespace get-credentials") and response["exit_code"] == 0:
+                        config = json.loads(troubleshooting.kubeconfig(self.state["clusters"][0]))
+                        config["contexts"][0]["context"]["namespace"] = "retail"
+                        content = json.dumps(config, indent=2)+"\n"
+                        if options.get("--file") == "-": response["stdout"] = content
+                        else:
+                            response["stdout"] = ""
+                            response["kubeconfig"] = content
+                    if command.startswith(("account ", "config ")) or command == "version":
+                        event.update(category="local", modeled_api_requests=0, modeled_kubernetes_requests=0)
+            except WorldError as error:
+                response = {"stdout": "", "stderr": f"ERROR: ({error.code}) {error}\n", "exit_code": error.exit_code}
+                event.update(error_code=error.code, http_status=error.status)
+                if error.code.startswith("Mock"): event["category"] = "coverage_gap"
+            end = time.monotonic()
+            goal = grade(self.scenario, self.state)["success"]
+            if goal:
+                self.first_goal_s = self.first_goal_s or end-self.started
+                if verified(self.scenario, self.state): self.verified_goal_s = self.verified_goal_s or end-self.started
+            event.update(end_s=end-self.started, duration_ms=(end-start)*1000, exit_code=response["exit_code"],
+                         state_before=before, state_after=self.state_hash(), goal_satisfied=goal, stdout_bytes=len(response["stdout"].encode()))
+            if files: event["uploaded_files"] = {name: hashlib.sha256(body.encode()).hexdigest() for name,body in files.items()}
+            if stdin is not None: event["stdin_sha256"] = hashlib.sha256(stdin.encode()).hexdigest()
+            self.events.append(event)
+            if self.log_path:
+                with self.log_path.open("a") as stream: stream.write(json.dumps(event)+"\n")
+            return response
+
     def external_call(self, tool, argv):
         with self.lock:
             start = time.monotonic()
@@ -346,6 +418,10 @@ class Simulator:
 
     def help(self, command):
         text = self.base_help(command)
+        if self.scenario.get("suite") == "candidate-v1":
+            from .candidate_help import help_text
+            text = help_text(command) or text
+            if command == "aks": text += "\nAdditional Subgroups:\n    identity-binding : Manage workload identity bindings.\n    safeguards : Deployment safeguards.\n"
         if command.startswith("aks namespace"):
             text += "\nReference: " + documentation.NAMESPACE_URL + "\n"
         elif command in ("aks upgrade", "aks nodepool upgrade"):

@@ -179,7 +179,7 @@ class DocumentationTests(unittest.TestCase):
             lookup.return_value = [(2, 1, 6, "", ("13.107.246.40", 443))]
             env = {}
             hosts = documentation_network(directory, env, {"api.github.com"})
-            self.assertEqual(hosts, {"api.github.com", "learn.microsoft.com"})
+            self.assertEqual(hosts, {"api.github.com", "learn.microsoft.com", "kubernetes.io"})
             self.assertNotIn("management.azure.com", (Path(directory) / "hosts").read_text())
             self.assertEqual(env["AKS_BENCH_DOCS_MODE"], "live")
             lookup.return_value = [(2, 1, 6, "", ("127.0.0.1", 443))]

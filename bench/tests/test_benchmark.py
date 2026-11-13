@@ -11,6 +11,7 @@ from aks_bench.mock import COMMANDS, SEMANTIC, Simulator
 from aks_bench.runner import oracle_commands, report, telemetry, provider_environment, container_command
 from aks_bench.scenarios import NAMES, make, grade
 from aks_bench.services import Services, allowed_authority
+from aks_bench.candidate_solutions import execute
 
 
 class SimulatorTests(unittest.TestCase):
@@ -35,10 +36,10 @@ class SimulatorTests(unittest.TestCase):
                 sim = Simulator(scenario, latency_scale=0)
                 self.assertFalse(grade(scenario, sim.state)["success"])
                 for args in oracle_commands(scenario):
-                    result = sim.call(args["argv"], tool=args["tool"]) if isinstance(args, dict) else sim.call(args)
+                    result = execute(sim, args)
                     if "TooManyRequests" in result["stderr"]:
                         result = sim.call(args)
-                    self.assertEqual(result["exit_code"], 0, result)
+                    self.assertEqual(result["exit_code"], args.get("expect_exit", 0) if isinstance(args, dict) else 0, result)
                 self.assertTrue(grade(scenario, sim.state)["success"])
                 self.assertIsNotNone(sim.verified_goal_s)
 
