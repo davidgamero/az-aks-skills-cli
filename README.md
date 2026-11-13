@@ -161,6 +161,10 @@ The [skill coverage and tuning guide](docs/skill-catalog-tuning.md) explains the
 nine benchmark skills and the original-versus-revised content comparison.
 The [discovery trace review](docs/skill-discovery-review.md) shows when the agent
 encounters the help entry, chooses a skill, or proceeds without one.
+The [observed task/action map](docs/task-action-skill-map.md) maps those reads to
+specific workflows. The [FAQ/guide candidate map](docs/scenario-candidate-map.md)
+adds 17 proposed benchmark tasks across eight topics, with a source index and
+machine-readable scenario designs.
 To inspect that catalog directly:
 
 ```sh
