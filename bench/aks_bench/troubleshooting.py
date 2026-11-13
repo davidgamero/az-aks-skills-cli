@@ -142,7 +142,9 @@ def kubectl(cluster, argv, error):
         if arg.startswith("-"):
             key, eq, value = arg.partition("=")
             key = {"-n": "--namespace", "-o": "--output"}.get(key, key)
-            if not eq:
+            if key in ("-A", "--all-namespaces", "--show-labels"):
+                value = True
+            elif not eq:
                 i += 1
                 if i == len(argv):
                     raise error("ArgumentError", f"missing value for {key}", 0, 2)
@@ -153,6 +155,8 @@ def kubectl(cluster, argv, error):
         i += 1
     action = words[0]
     resource = words[1] if len(words) > 1 else ""
+    if action in ("get", "describe") and resource in ("pdb", "poddisruptionbudget", "poddisruptionbudgets"):
+        return '{"apiVersion":"v1","kind":"List","items":[]}\n', False
     if action == "get" and "," in resource:
         items, verified = [], False
         index = argv.index(resource)
@@ -166,12 +170,16 @@ def kubectl(cluster, argv, error):
         nodes = []
         for pool in cluster["agentPoolProfiles"]:
             for index in range(pool["count"]):
-                nodes.append({"apiVersion": "v1", "kind": "Node", "metadata": {"name": f"aks-{pool['name']}-{index}", "labels": {"agentpool": pool["name"]}},
+                nodes.append({"apiVersion": "v1", "kind": "Node", "metadata": {"name": f"aks-{pool['name']}-{index}", "labels": {"agentpool": pool["name"], "kubernetes.azure.com/agentpool": pool["name"]}},
                               "status": {"conditions": [{"type": "Ready", "status": "True"}], "nodeInfo": {"kubeletVersion": "v" + pool["orchestratorVersion"]}}})
+        selector = opts.get("-l", opts.get("--selector"))
+        if selector:
+            key, _, value = selector.partition("=")
+            nodes = [node for node in nodes if node["metadata"]["labels"].get(key) == value]
         return json.dumps({"kind": "List", "items": nodes}, indent=2) + "\n", True
     if "_workload" not in cluster:
         raise error("MockNotImplemented", "Kubernetes workload state is not modeled for this scenario", 0, 2)
-    if opts.get("--namespace", "default") != "retail":
+    if opts.get("--namespace", "default") != "retail" and not opts.get("-A", opts.get("--all-namespaces")):
         raise error("NotFound", "use the workload namespace retail", 404)
     if action in ("patch", "edit", "delete", "apply", "replace"):
         if resource in ("resourcequota", "resourcequotas", "quota", "namespace", "namespaces", "ns"):

@@ -138,10 +138,11 @@ installed Azure CLI 2.86.0 ACS module. It excludes extensions such as aks-previe
 and aks-agent. `bench/capture_commands.py` refreshes this snapshot offline using
 Azure CLI's own Python; it never runs a resource operation.
 
-The simulator currently has stateful handlers for **32 core AKS commands**: cluster
+The simulator currently has stateful handlers for **33 core AKS commands**: cluster
 list/show/create/delete/update/scale/start/stop/upgrade/version discovery/wait,
 and the analogous supported nodepool operations, plus maintenanceconfiguration
-list/show/add/update/delete, namespace list/show/update, and get-credentials.
+list/show/add/update/delete, namespace list/show/update, get-credentials, and a
+read-only kubectl simulation for command invoke (never a real remote shell).
 Eight auxiliary commands have fixtures: group show/exists, provider show/list/register,
 monitor activity-log list, deployment group list, and the extension's
 `aks operation show-latest`. A bounded fake kubectl models context/node inspection,

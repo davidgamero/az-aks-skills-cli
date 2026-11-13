@@ -222,6 +222,7 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
               "documentation_lookups": sum(e["category"] == "documentation" for e in sim.events),
               "documentation_http_requests": sum(e.get("documentation_http_requests", 0) for e in sim.events),
               "kubernetes_calls": sum(e.get("tool") == "kubectl" for e in sim.events),
+              "modeled_kubernetes_requests": sum(e.get("modeled_kubernetes_requests", 0) for e in sim.events),
               "skill_calls": sum(e["category"] == "skill" for e in sim.events),
               "skill_reads": sum(e["command"] == "aks skill show" and e["exit_code"] == 0 and not any(a in ("--help", "-h") for a in e["argv"]) for e in sim.events),
               "azure_cli_calls": sum(e["category"] == "azure" for e in sim.events),

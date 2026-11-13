@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import re
+import shlex
 from pathlib import Path
 import subprocess
 import sys
@@ -31,6 +32,7 @@ SEMANTIC = {
     "aks maintenanceconfiguration delete", "aks maintenanceconfiguration list", "aks maintenanceconfiguration show",
     "aks namespace list", "aks namespace show", "aks namespace update",
     "aks get-credentials",
+    "aks command invoke",
 }
 AUXILIARY = {"group show", "group exists", "provider show", "provider list", "provider register",
              "monitor activity-log list", "deployment group list", "aks operation show-latest"}
@@ -46,7 +48,7 @@ VALUES = {"--resource-group", "--name", "--cluster-name", "--nodepool-name", "--
           "--network-plugin", "--network-plugin-mode", "--network-dataplane", "--network-policy", "--outbound-type",
           "--schedule-type", "--day-of-week", "--interval-weeks", "--duration", "--start-time", "--utc-offset",
           "--start-date", "--namespace", "--cpu-request", "--cpu-limit", "--memory-request", "--memory-limit",
-          "--ingress-policy", "--egress-policy", "--file", "--offset", "--status", "--max-events", "--resource-id", "--end-time"}
+          "--ingress-policy", "--egress-policy", "--file", "--offset", "--status", "--max-events", "--resource-id", "--end-time", "--command"}
 
 
 class CLIError(Exception):
@@ -212,6 +214,8 @@ class Simulator:
                         event["modeled_api_requests"] = scripted.get("api_requests", 1)
                     else:
                         value = self.execute(command, opts)
+                    if command == "aks command invoke" and isinstance(value, dict):
+                        event["modeled_kubernetes_requests"] = value.pop("_kubernetes_requests", 0)
                     changed = self.state["clusters"] != snapshot
                     if changed and not command.endswith(" wait"):
                         event["modeled_api_requests"] += 2  # write + poll + final GET, explicit model
@@ -472,6 +476,30 @@ class Simulator:
             return cluster["agentPoolProfiles"] if nodepool else cluster
         if command == "aks get-credentials":
             return troubleshooting.kubeconfig(cluster)
+        if command == "aks command invoke":
+            lexer = shlex.shlex(need("--command"), posix=True, punctuation_chars=";&|<>")
+            lexer.whitespace_split = True
+            statements, current = [], []
+            for token in lexer:
+                if token in (";", "&&"):
+                    if current:
+                        statements.append(current)
+                        current = []
+                elif token in ("&", "|", "||", "<", ">", ">>"):
+                    raise CLIError("MockNotImplemented", "remote shell operators other than ; and && are not modeled", 0, 2)
+                else:
+                    current.append(token)
+            if current:
+                statements.append(current)
+            if not statements or any(s[0] != "kubectl" or len(s) < 2 or s[1] not in ("get", "describe", "config") for s in statements):
+                raise CLIError("MockNotImplemented", "remote command fixture supports read-only kubectl inspection only", 0, 2)
+            # Never execute a shell or subprocess. Evaluate only the mock Kubernetes reads.
+            logs = []
+            for statement in statements:
+                text, _ = troubleshooting.kubectl(cluster, statement[1:], CLIError)
+                logs.append(text)
+            return {"id": cluster["id"] + "/runCommands/benchmark", "provisioningState": "Succeeded",
+                    "exitCode": 0, "logs": "".join(logs), "_kubernetes_requests": len(statements)}
         if action == "wait":
             if self.state["pending"]:
                 timeout = float(options.get("--timeout", 30))

@@ -52,6 +52,22 @@ class FaultTests(unittest.TestCase):
         self.assertEqual(combined["exit_code"], 0, combined)
         self.assertEqual(len(json.loads(combined["stdout"])["items"]), 3)
 
+    def test_pdb_and_remote_node_inspection_are_bounded(self):
+        sim = Simulator(make("debug-version-skew", 1), latency_scale=0)
+        pdb = sim.call(["--kubeconfig", "/work/fixture", "get", "pdb", "-A", "-o", "wide"], tool="kubectl")
+        self.assertEqual(pdb["exit_code"], 0, pdb)
+        self.assertEqual(json.loads(pdb["stdout"])["items"], [])
+        base = ["aks", "command", "invoke", "-g", "rg-dev-3201", "-n", "aks-dev-3201", "--command"]
+        result = sim.call(base + ["kubectl get nodes -l agentpool=apps -o json"])
+        self.assertEqual(result["exit_code"], 0, result)
+        self.assertEqual(len(json.loads(json.loads(result["stdout"])["logs"])["items"]), 2)
+        self.assertEqual(sim.events[-1]["modeled_kubernetes_requests"], 1)
+        before = copy.deepcopy(sim.state["clusters"])
+        for command in ("curl https://management.azure.com", "kubectl delete pods -A", "kubectl get nodes | sh"):
+            result = sim.call(base + [command])
+            self.assertEqual(result["exit_code"], 2)
+            self.assertEqual(sim.state["clusters"], before)
+
     def test_kubeconfig_file_written_only_inside_container_roots(self):
         path = Path(__file__).resolve().parents[1] / "container" / "client.py"
         spec = importlib.util.spec_from_file_location("benchmark_container_client", path)
