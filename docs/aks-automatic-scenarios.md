@@ -2,6 +2,55 @@
 
 Research date: November 13, 2026.
 
+## First live results
+
+Eight fresh isolated trials completed on committed revision `6817a49`, using
+Copilot CLI 1.0.98 and observed model `gpt-6.1-sol`. All eight passed the state
+oracle, verification requirements and containment checks, with no coverage gaps.
+Each condition has only one matched seed (`1`).
+
+### Guided use
+
+| Scenario | No-skills seconds | Skills seconds | Modeled Azure requests, no-skills / skills | Model inference spans, no-skills / skills |
+|---|---:|---:|---:|---:|
+| Create Automatic | 16.94 | 15.88 | 7 / 4 | 5 / 5 |
+| Reschedule maintenance | 20.31 | 22.87 | 10 / 10 | 5 / 7 |
+| **Sum** | **37.24** | **38.75** | **17 / 14** | **10 / 12** |
+
+Creation provides a limited positive observation: the skill run made only the
+create and verification calls against simulated Azure. The baseline additionally
+called `group show`, `aks list`, and `aks nodepool list`. Both chose the correct
+Automatic creation flags. The skill run therefore used three fewer simulated
+read operations and completed about 1.05 seconds faster, with the same number of
+model inference spans. This is not a replicated latency result or a success-rate
+improvement; both runs succeeded.
+
+For maintenance, both arms made six simulated Azure commands and achieved the
+same correct schedules. The skill run again tried `search --query` and positional
+`show`, recovered, and read the document. It took two extra model inference spans
+and about 2.56 seconds longer. Across these two tasks, skills reduced modeled
+Azure requests but remained about 1.51 seconds slower in total.
+
+### Passive availability
+
+| Scenario | No-skills seconds | Skills-available seconds | Modeled Azure requests, no-skills / treatment | Treatment skill reads |
+|---|---:|---:|---:|---:|
+| Create Automatic | 17.66 | 18.09 | 7 / 7 | 0 |
+| Reschedule maintenance | 18.36 | 22.39 | 10 / 10 | 0 |
+
+Neither treatment agent invoked a skill. These timings do not measure skill-use
+overhead, because the skill documents were never retrieved.
+
+Raw artifacts are local and gitignored at:
+
+- `benchmark-results/sol-automatic-guided-20261113/`
+- `benchmark-results/sol-automatic-passive-20261113/`
+
+These are modeled Azure request counts, not actual ARM traffic. Model inference
+spans come from Copilot telemetry. The small creation result qualifies the earlier
+finding: there is now one observed case of reduced request count and slightly
+lower wall time, but no demonstrated broad or reliable benefit.
+
 ## What makes Automatic different
 
 Microsoft's [Automatic overview](https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic)
