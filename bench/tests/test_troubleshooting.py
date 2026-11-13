@@ -9,7 +9,7 @@ from urllib.error import HTTPError
 
 from aks_bench import documentation
 from aks_bench.mock import Simulator
-from aks_bench.runner import oracle_commands
+from aks_bench.runner import oracle_commands, native_web_usage, documentation_network
 from aks_bench.scenarios import make, grade
 
 
@@ -57,6 +57,9 @@ class FaultTests(unittest.TestCase):
         pdb = sim.call(["--kubeconfig", "/work/fixture", "get", "pdb", "-A", "-o", "wide"], tool="kubectl")
         self.assertEqual(pdb["exit_code"], 0, pdb)
         self.assertEqual(json.loads(pdb["stdout"])["items"], [])
+        pods = sim.call(["get", "pods", "--all-namespaces", "-o", "wide"], tool="kubectl")
+        self.assertEqual(pods["exit_code"], 0, pods)
+        self.assertEqual(len(json.loads(pods["stdout"])["items"]), 2)
         base = ["aks", "command", "invoke", "-g", "rg-dev-3201", "-n", "aks-dev-3201", "--command"]
         result = sim.call(base + ["kubectl get nodes -l agentpool=apps -o json"])
         self.assertEqual(result["exit_code"], 0, result)
@@ -150,6 +153,31 @@ class FaultTests(unittest.TestCase):
 
 
 class DocumentationTests(unittest.TestCase):
+    def test_native_web_attempts_and_transport_failures_are_counted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "stdout.jsonl"
+            events = [
+                {"type": "tool.execution_start", "data": {"toolCallId": "a", "toolName": "web_fetch", "arguments": {"url": documentation.NAMESPACE_URL}}},
+                {"type": "tool.execution_complete", "data": {"toolCallId": "a", "success": False, "error": {"message": "failed to lookup address information: Temporary failure in name resolution"}}},
+                {"type": "tool.execution_start", "data": {"toolCallId": "b", "toolName": "web_fetch", "arguments": {"url": documentation.NAMESPACE_URL}}},
+                {"type": "tool.execution_complete", "data": {"toolCallId": "b", "success": True}},
+            ]
+            path.write_text("\n".join(json.dumps(e) for e in events))
+            self.assertEqual(native_web_usage(path), {"native_web_tool_attempts": 2, "native_web_tool_successes": 1,
+                                                      "native_web_tool_failures": 1, "native_docs_transport_failures": 1})
+
+    def test_native_docs_get_only_public_dns_mapping_and_host_allowlist(self):
+        with tempfile.TemporaryDirectory() as directory, patch("aks_bench.runner.socket.getaddrinfo") as lookup:
+            lookup.return_value = [(2, 1, 6, "", ("13.107.246.40", 443))]
+            env = {}
+            hosts = documentation_network(directory, env, {"api.github.com"})
+            self.assertEqual(hosts, {"api.github.com", "learn.microsoft.com"})
+            self.assertNotIn("management.azure.com", (Path(directory) / "hosts").read_text())
+            self.assertEqual(env["AKS_BENCH_DOCS_MODE"], "live")
+            lookup.return_value = [(2, 1, 6, "", ("127.0.0.1", 443))]
+            with self.assertRaises(ValueError):
+                documentation_network(directory, {}, set())
+
     def test_only_read_only_learn_paths_are_approved(self):
         self.assertTrue(documentation.approved(documentation.NAMESPACE_URL))
         self.assertTrue(documentation.approved("https://learn.microsoft.com/api/search?search=quota&locale=en-us"))

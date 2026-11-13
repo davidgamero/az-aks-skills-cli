@@ -157,6 +157,14 @@ def kubectl(cluster, argv, error):
     resource = words[1] if len(words) > 1 else ""
     if action in ("get", "describe") and resource in ("pdb", "poddisruptionbudget", "poddisruptionbudgets"):
         return '{"apiVersion":"v1","kind":"List","items":[]}\n', False
+    if action in ("get", "describe") and "_workload" not in cluster and resource in ("pods", "pod", "events", "event"):
+        # Version-skew validation fails in ARM before a Kubernetes drain starts.
+        # The fixture has healthy DNS system pods and no application workloads/events.
+        items = []
+        if resource in ("pods", "pod") and (opts.get("-A", opts.get("--all-namespaces")) or opts.get("--namespace") == "kube-system"):
+            items = [{"apiVersion": "v1", "kind": "Pod", "metadata": {"name": f"coredns-{i}", "namespace": "kube-system"},
+                      "status": {"phase": "Running", "conditions": [{"type": "Ready", "status": "True"}]}} for i in range(2)]
+        return json.dumps({"apiVersion": "v1", "kind": "List", "items": items}) + "\n", False
     if action == "get" and "," in resource:
         items, verified = [], False
         index = argv.index(resource)

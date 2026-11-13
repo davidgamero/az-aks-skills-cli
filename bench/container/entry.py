@@ -90,6 +90,10 @@ def main():
                    "--output-format", "json", "--usage-output-file", "/results/usage.json",
                    "--log-dir", "/results/logs",
                    "--secret-env-vars=COPILOT_GITHUB_TOKEN,COPILOT_PROVIDER_API_KEY,COPILOT_PROVIDER_BEARER_TOKEN"]
+        if env.get("AKS_BENCH_DOCS_MODE") == "live":
+            command.append("--allow-url=https://learn.microsoft.com")
+        else:
+            command.append("--excluded-tools=web_fetch")
         Path("/results/agent-start.json").write_text(json.dumps({"time": time.time()}))
         return subprocess.call(command, env=env)
 

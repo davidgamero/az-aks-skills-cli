@@ -2,12 +2,14 @@
 
 import argparse
 import hashlib
+import ipaddress
 import json
 import os
 from pathlib import Path
 import random
 import shutil
 import signal
+import socket
 import shlex
 import statistics
 import subprocess
@@ -79,8 +81,10 @@ def container_command(engine, bwrap, copilot, sockets, artifacts, entry_args, en
                    "--ro-bind", str(client / "client.py"), "/usr/bin/az",
                    "--ro-bind", str(copilot), "/opt/copilot",
                    "--ro-bind", str(sockets), "/run/bench",
-                   "--bind", str(artifacts), "/results", "--chdir", "/work",
-                   "--", "/usr/bin/python3", "/opt/client/entry.py", *entry_args]
+                   "--bind", str(artifacts), "/results", "--chdir", "/work"]
+        if (sockets / "hosts").exists():
+            command.extend(["--ro-bind", str(sockets / "hosts"), "/etc/hosts"])
+        command.extend(["--", "/usr/bin/python3", "/opt/client/entry.py", *entry_args])
     else:
         command = ["docker", "run", "--rm", "--name", name, "--network", "none", "--read-only",
                    "--cap-drop", "ALL", "--security-opt", "no-new-privileges", "--pids-limit", "128",
@@ -92,8 +96,49 @@ def container_command(engine, bwrap, copilot, sockets, artifacts, entry_args, en
                    "--mount", f"type=bind,src={artifacts},dst=/results"]
         for key in env:
             command.extend(["--env", key])
+        if (sockets / "hosts").exists():
+            command.extend(["--mount", f"type=bind,src={sockets / 'hosts'},dst=/etc/hosts,readonly"])
         command.extend(["az-aks-bench:local", *entry_args])
     return command
+
+
+def documentation_network(sockets, env, hosts):
+    """Native web_fetch validates DNS before using HTTPS_PROXY; supply only Learn."""
+    addresses = socket.getaddrinfo("learn.microsoft.com", 443, family=socket.AF_INET, type=socket.SOCK_STREAM)
+    ip = addresses[0][4][0]
+    if not ipaddress.ip_address(ip).is_global:
+        raise ValueError("Microsoft Learn must resolve to a public address")
+    (Path(sockets) / "hosts").write_text(f"127.0.0.1 localhost\n{ip} learn.microsoft.com\n")
+    env["AKS_BENCH_DOCS_MODE"] = "live"
+    return set(hosts) | {"learn.microsoft.com"}
+
+
+def native_web_usage(path):
+    """Count native web tools independently of host-owned curl HTTP requests."""
+    calls, completed = {}, {}
+    if path.exists():
+        for line in path.read_text().splitlines():
+            try:
+                event = json.loads(line)
+            except ValueError:
+                continue
+            data = event.get("data", {})
+            if event.get("type") == "tool.execution_start" and data.get("toolName") in ("web_fetch", "web_search"):
+                calls[data["toolCallId"]] = data
+            elif event.get("type") == "tool.execution_complete":
+                completed[data.get("toolCallId")] = data
+    successes, transport_failures = 0, 0
+    for call_id, call in calls.items():
+        result = completed.get(call_id, {})
+        successes += result.get("success") is True
+        message = result.get("error", {}).get("message", "").lower()
+        url = call.get("arguments", {}).get("url", "")
+        if url.startswith("https://learn.microsoft.com/") and any(
+            text in message for text in ("failed to lookup address", "network is unreachable", "temporary failure in name resolution")
+        ):
+            transport_failures += 1
+    return {"native_web_tool_attempts": len(calls), "native_web_tool_successes": successes,
+            "native_web_tool_failures": len(calls) - successes, "native_docs_transport_failures": transport_failures}
 
 
 def telemetry(path):
@@ -186,6 +231,10 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
             entry = [args.model, prompt]
         temp_base = Path("/tmp/opencode") if Path("/tmp/opencode").is_dir() else None
         with tempfile.TemporaryDirectory(prefix="aks-bench-", dir=temp_base) as sockets:
+            if mode != "check" and getattr(args, "docs_mode", "off") == "live":
+                hosts = documentation_network(sockets, env, hosts)
+            else:
+                env["AKS_BENCH_DOCS_MODE"] = "off"
             with Services(sockets, sim, hosts, directory / "proxy-events.jsonl"):
                 name = "aks-bench-" + os.urandom(5).hex()
                 command = container_command(args.engine, args.bwrap, Path(args.copilot).resolve(), Path(sockets), artifacts.resolve(), entry, env, name)
@@ -229,7 +278,11 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
               "modeled_api_requests": sum(e["modeled_api_requests"] for e in sim.events),
               "failed_az_calls": sum(e.get("tool", "az") == "az" and e["exit_code"] != 0 for e in sim.events),
               "failed_tool_calls": sum(e["exit_code"] != 0 for e in sim.events),
+              **native_web_usage(directory / "copilot.stdout.jsonl"),
               **telemetry(artifacts / "otel.jsonl")}
+    if result["native_docs_transport_failures"]:
+        result["valid_trial"] = False
+        result["harness_error"] = "native Microsoft Learn lookup failed at the container transport boundary"
     if mode == "live" and returncode != 0 and not sim.events:
         result["valid_trial"] = False
         result["harness_error"] = "agent failed before any az invocation; inspect stderr"
@@ -258,6 +311,8 @@ def report(directory):
                          "skill_adoption": sum(r.get("skill_reads", 0) > 0 for r in valid),
                          "documentation_lookups": sum(r.get("documentation_lookups", 0) for r in valid),
                          "documentation_http_requests": sum(r.get("documentation_http_requests", 0) for r in valid),
+                         "native_web_tool_attempts": sum(r.get("native_web_tool_attempts", 0) for r in valid),
+                         "native_web_tool_successes": sum(r.get("native_web_tool_successes", 0) for r in valid),
                          "kubernetes_calls": sum(r.get("kubernetes_calls", 0) for r in valid),
                          "success_rate": len(successes) / len(valid) if valid else None}
         pairs = []
@@ -279,13 +334,15 @@ def report(directory):
     json_file(Path(directory) / "summary.json", summary)
     lines = ["# AKS mock benchmark", "", "Negative paired deltas favor skills. API requests are modeled, not measured Azure traffic.",
              "Time deltas include the complete agent run. Failures are retained; deltas use successful matched pairs only.", "",
-             "| Scenario | Mode | Baseline success/valid | Skills success/valid | Skill adoption | Successful pairs | Δ seconds | Δ modeled API |",
-             "|---|---|---:|---:|---:|---:|---:|---:|"]
+              "| Scenario | Mode | Baseline success/valid | Skills success/valid | Skill adoption | Successful pairs | Δ seconds | Δ modeled API | Docs attempts B/S |",
+              "|---|---|---:|---:|---:|---:|---:|---:|---:|"]
     for r in summary:
         b, s, d = r["baseline"], r["skills"], r["median_paired_delta_skills_minus_baseline"]
         seconds = f"{d['elapsed_s']:.2f}" if d else "—"
         api = str(d["modeled_api_requests"]) if d else "—"
-        lines.append(f"| {r['scenario']} | {r['mode']} | {b['successes']}/{b['valid_trials']} | {s['successes']}/{s['valid_trials']} | {s['skill_adoption']} | {r['successful_pairs']} | {seconds} | {api} |")
+        docs_b = b["documentation_lookups"] + b["native_web_tool_attempts"]
+        docs_s = s["documentation_lookups"] + s["native_web_tool_attempts"]
+        lines.append(f"| {r['scenario']} | {r['mode']} | {b['successes']}/{b['valid_trials']} | {s['successes']}/{s['valid_trials']} | {s['skill_adoption']} | {r['successful_pairs']} | {seconds} | {api} | {docs_b}/{docs_s} |")
     lines.extend(["", "Replay rows validate the harness only; they are not agent benchmark results.",
                   "A smoke trial is not enough to establish a reliable improvement. Inspect result.json, traces and failures."])
     (Path(directory) / "summary.md").write_text("\n".join(lines) + "\n")

@@ -90,6 +90,23 @@ request. Raw diagnostic artifacts remain in
 `benchmark-results/sol-troubleshooting-discovery-20261113/` and are not pooled
 into valid benchmark comparisons.
 
+A second sweep exposed a docs-access issue: the quota baseline attempted native
+Copilot `web_fetch`, which failed DNS validation in the isolated network before
+using the proxy. The zero HTTP count above refers to the logged curl client;
+it must not be interpreted as zero attempted browsing. That affected trial is
+invalidated in the derived report; raw traces are preserved.
+
+Native web fetching is now enabled through an explicit public-IP hosts mapping
+and exact-host proxy allowlist for learn.microsoft.com. A separate live Copilot
+probe fetched the managed-namespace page successfully using native `web_fetch`,
+with all containment checks passing. Native tool attempts/successes/failures are
+tracked separately, and DNS/network transport failures invalidate future trials.
+The probe lives at `benchmark-results/native-web-probe-20261113/`.
+
+Additional observed PDB/pod inspection and read-only `az aks command invoke`
+queries are modeled. Remote command strings are parsed into a bounded set of
+mock Kubernetes reads; they never execute a host shell.
+
 ### `debug-version-skew`
 
 **Task:** A previous apps-pool upgrade failed. Finish upgrading it to 1.34.2;
@@ -153,19 +170,23 @@ The container's `curl` is a logged GET-only client. It can fetch:
 - `https://learn.microsoft.com/en-us/cli/azure/...`
 - `https://learn.microsoft.com/api/search?...`
 
-The host fetcher validates the origin and path before each request and redirect.
+The curl host fetcher validates the origin and path before each request and redirect.
 It accepts no credentials, uploads or mutation methods. Each response is capped
 at 2 MiB and saved outside the container with its content hash. The existing
 network namespace and model proxy continue to block ARM and arbitrary internet.
 This gives a controlled live documentation/search comparison, not unrestricted
 web browsing. A container smoke probe verified both the fake kubectl path and an
 actual successful Learn fetch while all isolation checks passed.
+Native Copilot web fetching can also use the exact Learn host through the proxy.
+Native response content appears in Copilot's tool output; curl body snapshots
+and per-HTTP counts belong to the separate host fetcher.
 
 Metrics distinguish:
 
 - Skill retrievals and actual successful skill reads.
 - Simulated Azure API costs and Kubernetes requests.
-- Actual documentation HTTP attempts, including redirects/failures.
+- Actual curl documentation HTTP attempts, including redirects/failures, and
+  separately counted native web tool attempts/successes/failures.
 - Model inference spans, tokens, full elapsed time and verified completion time.
 
 The legacy `az-events.jsonl` filename contains all three tool types; use its `tool`

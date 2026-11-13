@@ -115,6 +115,12 @@ execute through a bounded host fetcher, with redirects confined to approved
 paths; it cannot reach ARM. Both arms have the same docs access. `--docs-mode off`
 disables it. Response bodies and hashes are retained locally for reproducibility.
 This is controlled documentation access, not an unrestricted browser/search engine.
+Native Copilot `web_fetch` is also supported: the container receives a public-IP
+hosts mapping for learn.microsoft.com and the proxy permits that exact host.
+This satisfies the tool's DNS validation before its proxied HTTPS fetch. Native
+web attempts/successes/failures are counted from CLI events, separately from curl
+HTTP counts; native TLS connections remain in the proxy trace. Native Learn
+transport failures invalidate a trial rather than masquerading as no browsing.
 
 Each container runs a preflight that checks external connectivity is blocked,
 the proxy denies ARM, and host home/Azure CLI/credentials/fixture paths are absent.
@@ -235,10 +241,12 @@ Each trial retains:
 - `result.json`: state checks, final success, call counts, failure/coverage status.
 
 The legacy filename `az-events.jsonl` now also holds kubectl and curl events;
-the `tool` field distinguishes them. `documentation_http_requests` counts actual
+the `tool` field distinguishes them. `documentation_http_requests` counts curl's actual
 host-side HTTP attempts (including permitted redirects), separately from modeled
 Azure and Kubernetes calls. `documents/` stores returned public documentation.
-Empty doc counts mean no lookup was observed, not that skills saved a lookup.
+Native tool attempts are recorded in `native_web_tool_attempts`; consult both
+counters before concluding that no lookup was observed. Neither count by itself
+establishes that a skill saved a lookup.
 
 The mock logs distinct quantities:
 
