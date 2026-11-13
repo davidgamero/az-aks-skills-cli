@@ -152,3 +152,5 @@ Current runs use **discovery-only, identical prompts**, with no runbook hint.
 [Troubleshooting scenarios](docs/troubleshooting-benchmark.md) add persistent
 upgrade, Automatic registration and managed-namespace quota failures, plus logged
 Microsoft Learn access for both arms. Use `--docs-mode off` for an offline comparison.
+The [discovery-only troubleshooting pilot](docs/troubleshooting-pilot.md) records
+valid matched pairs and the observed help-to-skill discovery path.

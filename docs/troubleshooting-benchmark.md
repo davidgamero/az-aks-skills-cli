@@ -1,5 +1,8 @@
 # Discovery-only troubleshooting benchmark
 
+See [the valid troubleshooting pilot results](troubleshooting-pilot.md) for
+the first matched pairs after diagnostic coverage and native docs access fixes.
+
 ## Changes to the experiment
 
 The runner no longer tells either agent that skills exist. Both arms receive
