@@ -5,7 +5,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends bash ca-certifi
     && mkdir -p /home/agent /work /results /run/bench
 COPY client.py /usr/bin/az
 COPY entry.py /opt/client/entry.py
-RUN chmod 755 /usr/bin/az
-ENV HOME=/home/agent PATH=/usr/local/bin:/usr/bin:/bin
+COPY client.py curl kubectl /opt/client/
+RUN chmod 755 /usr/bin/az /opt/client/curl /opt/client/kubectl
+ENV HOME=/home/agent PATH=/opt/client:/usr/local/bin:/usr/bin:/bin
 WORKDIR /work
 ENTRYPOINT ["/usr/bin/python3", "/opt/client/entry.py"]

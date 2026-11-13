@@ -35,7 +35,7 @@ class SimulatorTests(unittest.TestCase):
                 sim = Simulator(scenario, latency_scale=0)
                 self.assertFalse(grade(scenario, sim.state)["success"])
                 for args in oracle_commands(scenario):
-                    result = sim.call(args)
+                    result = sim.call(args["argv"], tool=args["tool"]) if isinstance(args, dict) else sim.call(args)
                     if "TooManyRequests" in result["stderr"]:
                         result = sim.call(args)
                     self.assertEqual(result["exit_code"], 0, result)
@@ -154,6 +154,28 @@ class SimulatorTests(unittest.TestCase):
         self.assertEqual(self.sim.events[-1]["modeled_api_requests"], 0)
         self.sim.skills = False
         self.assertEqual(self.call("aks skills")["exit_code"], 2)
+
+    def test_discovery_through_group_and_leaf_help(self):
+        for command in ("aks", "aks nodepool", "aks create", "aks nodepool update"):
+            self.sim.skills = False
+            baseline = self.call(command, "--help")["stdout"]
+            self.assertNotIn("skill", baseline)
+            self.sim.skills = True
+            treatment = self.call(command, "--help")["stdout"]
+            self.assertIn("skill", treatment)
+        self.assertIn("aks :", self.call("", "--help")["stdout"])
+
+    def test_task_prompt_is_identical_in_both_arms(self):
+        import argparse
+        from aks_bench.runner import trial
+        args = argparse.Namespace(fixture=None, latency_scale=0, discovery="passive", engine="bwrap", model="test", provider="copilot")
+        with tempfile.TemporaryDirectory() as temp:
+            for skills in (False, True):
+                trial(args, "manual-scale", 1, skills, Path(temp) / str(skills), mode="replay")
+            a = (Path(temp) / "False" / "prompt.txt").read_text()
+            b = (Path(temp) / "True" / "prompt.txt").read_text()
+            self.assertEqual(a, b)
+            self.assertNotIn("skill", a)
 
     def test_host_server_preserves_events_under_concurrency(self):
         with tempfile.TemporaryDirectory() as directory:

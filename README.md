@@ -10,8 +10,8 @@ az aks skill show --name aks-upgrade
 ```
 
 An executable `bin/az` owns the exact `az aks skill` prefix and its `az aks skills`
-alias. Every other
-invocation is handed to the installed Azure CLI. Skills are Markdown instructions;
+alias. AKS help pages include local discovery entries; other invocations are
+handed to the installed Azure CLI. Skills are Markdown instructions;
 the commands print them without executing their contents.
 
 ## Try it
@@ -75,9 +75,11 @@ ID, title, description, and tags. Results are ordered by ID. An empty result is 
 successful response (`[]` in JSON); an unknown ID is an error. Each JSON summary
 has `id`, `title`, `description`, and `tags`; `show` adds `content`.
 
-This is a shim experiment, not an installed Azure CLI extension. The initial
-prototype does not advertise itself in `az --help` or `az aks --help`; those
-commands are forwarded verbatim. It does not implement Azure CLI globals such as
+This is a shim experiment, not an installed Azure CLI extension. `az aks --help`
+lists `skill` and `skills` under Subgroups. Descendant help such as
+`az aks create --help` includes a Related Commands entry for skill discovery,
+while retaining the real Azure CLI help. `az --help` retains the normal entry
+for AKS. The local skill commands do not implement Azure CLI globals such as
 `--query`, `--debug`, or `--subscription` for local skill commands. Options must
 follow the subcommand. See [the design](docs/design.md) for the discovery plan.
 
@@ -130,7 +132,7 @@ needed. The included skills are small examples for exercising the interface.
 
 [`docs/benchmark.md`](docs/benchmark.md) describes the runnable skills-vs-no-skills
 experiment: stateful fake clusters, scripted success/errors across a captured
-99-command AKS registry, seven research-derived scenarios, rootless/Docker
+99-command AKS registry, ten research-derived scenarios, rootless/Docker
 containers, timestamped call traces, state-based scoring, and model/network metrics.
 
 It uses your local Copilot CLI (`gpt-6.1-sol` by default), with model selection and
@@ -145,3 +147,8 @@ added overhead in this small pilot; passive availability produced no skill reads
 The [help-change rerun](docs/benchmark-help-evaluation.md) compares the updated
 help interface. [Two AKS Automatic scenarios](docs/aks-automatic-scenarios.md)
 cover managed cluster creation and separate Kubernetes/node-image maintenance windows.
+
+Current runs use **discovery-only, identical prompts**, with no runbook hint.
+[Troubleshooting scenarios](docs/troubleshooting-benchmark.md) add persistent
+upgrade, Automatic registration and managed-namespace quota failures, plus logged
+Microsoft Learn access for both arms. Use `--docs-mode off` for an offline comparison.

@@ -19,6 +19,7 @@ from .mock import ROOT, Simulator, SEMANTIC, COMMANDS
 from .scenarios import NAMES, make, grade
 from .services import Services
 from . import automatic
+from . import troubleshooting
 
 COPILOT_HOSTS = {"api.github.com", "api.githubcopilot.com", "api.individual.githubcopilot.com",
                  "api.business.githubcopilot.com", "api.enterprise.githubcopilot.com",
@@ -37,13 +38,13 @@ def timeline(directory, events):
     lines = ["# CLI timeline", "", "Times are seconds since container launch; state and trace are host-owned.", "",
              "| Start | Duration ms | Kind | Exit | Modeled API | Command |", "|---:|---:|---|---:|---:|---|"]
     for event in events:
-        command = shlex.join(["az", *event["argv"]]).replace("|", "\\|").replace("`", "'")
+        command = shlex.join([event.get("tool", "az"), *event["argv"]]).replace("|", "\\|").replace("`", "'")
         lines.append(f"| {event['start_s']:.3f} | {event['duration_ms']:.1f} | {event['category']} | {event['exit_code']} | {event['modeled_api_requests']} | `{command}` |")
     (directory / "timeline.md").write_text("\n".join(lines) + "\n")
 
 
 def provider_environment(provider, gh_user=None):
-    env = {"PATH": "/usr/bin:/bin", "HOME": "/home/agent", "LANG": "C.UTF-8", "TERM": "dumb"}
+    env = {"PATH": "/opt/client:/usr/bin:/bin", "HOME": "/home/agent", "LANG": "C.UTF-8", "TERM": "dumb"}
     if provider == "foundry":
         for key in PROVIDER_VARS:
             if os.environ.get(key):
@@ -128,6 +129,8 @@ def telemetry(path):
 
 
 def oracle_commands(scenario):
+    if scenario["name"] in troubleshooting.NAMES:
+        return troubleshooting.oracle_commands(scenario)
     if scenario["name"] in automatic.NAMES:
         return automatic.oracle_commands(scenario)
     c = scenario["state"]["clusters"][0]
@@ -157,10 +160,9 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
     scenario = make(scenario_name, seed)
     if args.fixture:
         scenario = json.loads(Path(args.fixture).read_text())
-    sim = Simulator(scenario, skills=skills, log_path=directory / "az-events.jsonl", latency_scale=args.latency_scale)
+    sim = Simulator(scenario, skills=skills, log_path=directory / "az-events.jsonl", latency_scale=args.latency_scale,
+                    docs_mode=getattr(args, "docs_mode", "off"))
     prompt = scenario["prompt"]
-    if skills and args.discovery == "explicit":
-        prompt += " Local AKS runbooks are available through 'az aks skill list', 'az aks skill search', and 'az aks skill show'. Consult a relevant runbook before making changes."
     json_file(directory / "scenario.json", scenario)
     (directory / "prompt.txt").write_text(prompt + "\n")
     if mode == "replay":
@@ -168,7 +170,7 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
         if skills:
             sim.call(["aks", "skill", "list", "-o", "json"])
         for command in oracle_commands(scenario):
-            response = sim.call(command)
+            response = sim.call(command["argv"], tool=command["tool"]) if isinstance(command, dict) else sim.call(command)
             if response["exit_code"] and "TooManyRequests" in response["stderr"]:
                 response = sim.call(command)
             if response["exit_code"]:
@@ -177,7 +179,7 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
         isolation = None
     else:
         if mode == "check":
-            env, hosts = {"PATH": "/usr/bin:/bin", "HOME": "/home/agent"}, set()
+            env, hosts = {"PATH": "/opt/client:/usr/bin:/bin", "HOME": "/home/agent"}, set()
             entry = ["--check"]
         else:
             env, hosts = provider_environment(args.provider, args.gh_user)
@@ -215,11 +217,17 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
               "success": state_grade["success"] and sim.verified_goal_s is not None and returncode == 0 and not timeout,
               "coverage_gaps": unsupported, "isolation": isolation,
               "valid_trial": mode == "live" and bool(isolation) and all(isolation.values()) and not unsupported,
-              "az_calls": len(sim.events), "skill_calls": sum(e["category"] == "skill" for e in sim.events),
+              "tool_calls": len(sim.events), "az_calls": sum(e.get("tool", "az") == "az" for e in sim.events),
+              "docs_mode": getattr(args, "docs_mode", "off"),
+              "documentation_lookups": sum(e["category"] == "documentation" for e in sim.events),
+              "documentation_http_requests": sum(e.get("documentation_http_requests", 0) for e in sim.events),
+              "kubernetes_calls": sum(e.get("tool") == "kubectl" for e in sim.events),
+              "skill_calls": sum(e["category"] == "skill" for e in sim.events),
               "skill_reads": sum(e["command"] == "aks skill show" and e["exit_code"] == 0 and not any(a in ("--help", "-h") for a in e["argv"]) for e in sim.events),
               "azure_cli_calls": sum(e["category"] == "azure" for e in sim.events),
               "modeled_api_requests": sum(e["modeled_api_requests"] for e in sim.events),
-              "failed_az_calls": sum(e["exit_code"] != 0 for e in sim.events),
+              "failed_az_calls": sum(e.get("tool", "az") == "az" and e["exit_code"] != 0 for e in sim.events),
+              "failed_tool_calls": sum(e["exit_code"] != 0 for e in sim.events),
               **telemetry(artifacts / "otel.jsonl")}
     if mode == "live" and returncode != 0 and not sim.events:
         result["valid_trial"] = False
@@ -234,11 +242,11 @@ def report(directory):
     results = [json.loads(p.read_text()) for p in sorted(Path(directory).glob("*/result.json"))]
     grouped = {}
     for r in results:
-        key = (r["scenario"], r["requested_model"], r["provider"], r["discovery"], r["mode"])
+        key = (r["scenario"], r["requested_model"], r["provider"], r["discovery"], r["mode"], r.get("docs_mode", "off"))
         grouped.setdefault(key, []).append(r)
     summary = []
     for key, rows in grouped.items():
-        item = {"scenario": key[0], "model": key[1], "provider": key[2], "discovery": key[3], "mode": key[4]}
+        item = {"scenario": key[0], "model": key[1], "provider": key[2], "discovery": key[3], "mode": key[4], "docs_mode": key[5]}
         for arm, flag in (("baseline", False), ("skills", True)):
             trials = [r for r in rows if r["skills"] == flag]
             valid = [r for r in trials if r["valid_trial"]]
@@ -247,6 +255,9 @@ def report(directory):
                          "invalid_trials": len(trials) - len(valid), "failures": len(valid) - len(successes),
                          "timeouts": sum(r.get("timed_out", False) for r in valid),
                          "skill_adoption": sum(r.get("skill_reads", 0) > 0 for r in valid),
+                         "documentation_lookups": sum(r.get("documentation_lookups", 0) for r in valid),
+                         "documentation_http_requests": sum(r.get("documentation_http_requests", 0) for r in valid),
+                         "kubernetes_calls": sum(r.get("kubernetes_calls", 0) for r in valid),
                          "success_rate": len(successes) / len(valid) if valid else None}
         pairs = []
         for seed in sorted({r["seed"] for r in rows}):
@@ -255,13 +266,13 @@ def report(directory):
                 baseline, treatment = paired[False], paired[True]
                 pairs.append({metric: treatment[metric] - baseline[metric]
                               for metric in ("elapsed_s", "modeled_api_requests", "azure_cli_calls", "az_calls",
-                                             "time_to_verified_goal_s", "llm_requests")
+                                              "time_to_verified_goal_s", "llm_requests", "documentation_http_requests", "kubernetes_calls")
                               if treatment.get(metric) is not None and baseline.get(metric) is not None})
         item["successful_pairs"] = len(pairs)
         item["median_paired_delta_skills_minus_baseline"] = {
             metric: statistics.median(p[metric] for p in pairs if metric in p)
             for metric in ("elapsed_s", "modeled_api_requests", "azure_cli_calls", "az_calls",
-                           "time_to_verified_goal_s", "llm_requests") if any(metric in p for p in pairs)
+                            "time_to_verified_goal_s", "llm_requests", "documentation_http_requests", "kubernetes_calls") if any(metric in p for p in pairs)
         } if pairs else None
         summary.append(item)
     json_file(Path(directory) / "summary.json", summary)
@@ -295,8 +306,11 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=180)
     parser.add_argument("--latency-scale", type=float, default=1)
-    parser.add_argument("--discovery", choices=("explicit", "passive"), default="explicit")
+    parser.add_argument("--discovery", choices=("passive",), default="passive",
+                        help="Discovery-only: both arms receive identical task prompts")
     parser.add_argument("--fixture", help="Use a complete custom scenario JSON instead of generated fixtures")
+    parser.add_argument("--docs-mode", choices=("live", "off"), default="live",
+                        help="Allow logged GET-only Microsoft Learn access through the container curl tool")
     args = parser.parse_args(argv)
     if args.repeats < 1 or args.timeout <= 0 or args.latency_scale < 0:
         parser.error("repeats/timeout must be positive and latency-scale nonnegative")
@@ -315,7 +329,7 @@ def main(argv=None):
     args.output.mkdir(parents=True)
     metadata = {"model": args.model, "provider": args.provider, "engine": args.engine,
                 "discovery": args.discovery, "repeats": args.repeats, "seed": args.seed,
-                "latency_scale": args.latency_scale, "created_at": time.time(),
+                "latency_scale": args.latency_scale, "docs_mode": args.docs_mode, "created_at": time.time(),
                 "command_manifest_sha256": hashlib.sha256((ROOT / "commands.json").read_bytes()).hexdigest()}
     metadata["source_sha256"] = hashlib.sha256(b"".join(
         str(p.relative_to(ROOT)).encode() + p.read_bytes()

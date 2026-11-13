@@ -25,7 +25,10 @@ class MockHandler(socketserver.StreamRequestHandler):
             args = request["argv"]
             if not isinstance(args, list) or not all(isinstance(a, str) for a in args):
                 raise ValueError("argv must be strings")
-            response = self.server.simulator.call(args)
+            tool = request.get("tool", "az")
+            if tool not in ("az", "kubectl", "curl"):
+                raise ValueError("unsupported tool")
+            response = self.server.simulator.call(args, tool=tool)
         except (ValueError, KeyError) as error:
             response = {"stdout": "", "stderr": f"invalid mock request: {error}\n", "exit_code": 2}
         self.wfile.write(json.dumps(response).encode() + b"\n")

@@ -3,8 +3,10 @@
 import os
 from pathlib import Path
 import sys
+import subprocess
 
 from .cli import run
+from .help_overlay import patch_aks_help
 
 
 def find_real_az(shim_path: Path) -> Path:
@@ -43,6 +45,14 @@ def main(shim_path: Path) -> int:
         os.environ["_AZ_AKS_SKILL_SHIMS"] = os.pathsep.join(
             part for part in (visited, str(shim_path)) if part
         )
+        if args[:1] == ["aks"] and any(arg in ("--help", "-h") for arg in args):
+            result = subprocess.run([str(real_az), *args], stdout=subprocess.PIPE)
+            output = result.stdout
+            if result.returncode == 0:
+                command = " ".join(arg for arg in args if arg not in ("--help", "-h"))
+                output = patch_aks_help(output.decode("utf-8", errors="replace"), command).encode("utf-8")
+            sys.stdout.buffer.write(output)
+            return result.returncode
         os.execv(str(real_az), [str(real_az), *args])
     except (OSError, ValueError) as error:
         print(f"az shim: {error}", file=sys.stderr)

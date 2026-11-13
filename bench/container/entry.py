@@ -8,6 +8,7 @@ import select
 import socket
 import socketserver
 import subprocess
+import shutil
 import sys
 import threading
 import time
@@ -52,6 +53,8 @@ def isolation_check():
         "host_home_absent": not Path("/home/david").exists(),
         "real_azure_cli_absent": not Path("/opt/az").exists(),
         "fixture_files_absent": not Path("/opt/client/commands.json").exists(),
+        "mock_kubectl_selected": shutil.which("kubectl") == "/opt/client/kubectl",
+        "logged_docs_client_selected": shutil.which("curl") == "/opt/client/curl",
     }
     Path("/results/isolation.json").write_text(json.dumps(checks, indent=2))
     if not all(checks.values()):
@@ -68,7 +71,10 @@ def main():
             return 0
         if sys.argv[1:2] == ["--replay"]:
             for args in json.loads(sys.argv[2]):
-                result = subprocess.run(["/usr/bin/az", *args])
+                tool, arguments = (args["tool"], args["argv"]) if isinstance(args, dict) else ("az", args)
+                if tool not in ("az", "kubectl", "curl"):
+                    raise ValueError("unsupported replay tool")
+                result = subprocess.run([tool, *arguments])
                 if result.returncode:
                     return result.returncode
             return 0

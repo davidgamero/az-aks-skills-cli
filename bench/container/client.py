@@ -6,12 +6,12 @@ import socket
 import sys
 
 
-def main():
+def main(tool="az"):
     try:
         with socket.socket(socket.AF_UNIX) as connection:
             connection.settimeout(120)
             connection.connect("/run/bench/az.sock")
-            connection.sendall(json.dumps({"argv": sys.argv[1:]}).encode() + b"\n")
+            connection.sendall(json.dumps({"argv": sys.argv[1:], "tool": tool}).encode() + b"\n")
             response = json.loads(connection.makefile("rb").readline())
         sys.stdout.write(response["stdout"])
         sys.stderr.write(response["stderr"])

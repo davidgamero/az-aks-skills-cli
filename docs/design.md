@@ -20,6 +20,9 @@ checkout/bin/az (first on PATH)
     |       -> catalog metadata / Markdown
     |       -> stdout
     |
+    +-- AKS -h/--help requests
+    |       -> real Azure CLI help + local discovery entries
+    |
     +-- all other argv
             -> resolve real az
             -> os.execv(real_az, [real_az, *original_args])
@@ -27,7 +30,7 @@ checkout/bin/az (first on PATH)
 
 The routing decision happens before argument parsing. Unknown local subcommands
 fail locally, while `az aks show`, `az account show`, bare `az`,
-and normal Azure CLI help all reach the real CLI. Quoted values and flags are
+and normal Azure CLI commands reach the real CLI. Quoted values and flags are
 preserved as individual arguments: no shell command is reconstructed.
 
 Delegation uses process replacement instead of a subprocess relay. The real CLI
@@ -92,18 +95,23 @@ The shim locates source and the default catalog using its resolved file location
 not the caller's current directory. Selecting a worktree's `bin` selects that
 worktree's implementation and bundled content together.
 
-## Discovery tradeoff and next experiments
+## Help-based discovery and next experiments
 
-Exact passthrough means the prototype is absent from the real CLI's parent help.
-Users or agents can access `az aks skill --help` once they know the command. This
-first version measures command usefulness and retrieval, not spontaneous
-discovery through Azure CLI help.
+The wrapper captures successful AKS `-h`/`--help` stdout and overlays discovery
+entries. `az aks --help` gains skill/skills subgroups; descendant pages gain a
+Related Commands entry. Original help content, stderr and exit status are
+preserved. Failed help requests pass through unmodified. The overlay is
+idempotent when multiple worktree shims are stacked. Ordinary commands still
+use exec; help is the intentional subprocess exception. No installed Azure CLI
+files are edited. Root `az --help` already lists AKS and is forwarded unchanged.
+
+The benchmark uses the same overlay on its mock help. Both arms receive identical
+task prompts without mentioning skills; only treatment help exposes the commands.
 
 Suggested follow-up experiments:
 
-1. **Help discovery:** try an opt-in overlay for the exact `az --help` and
-   `az aks --help` routes, preserving the real help output and adding a clearly
-   labeled experimental group. Compare with a real extension integration.
+1. **Help discovery:** measure whether agents traverse parent or descendant help,
+   discover the skill group and successfully read a relevant skill.
 2. **Agent retrieval:** supply a temporary catalog with fresh content and record
    actual shim invocations, then verify the answer uses the retrieved skill.
 3. **Search quality:** compare metadata matching with Markdown full-text search

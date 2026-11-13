@@ -25,11 +25,11 @@ command name so adoption counts include both spellings. Both spellings are
 unavailable in the baseline. This help/alias improvement postdates the initial
 pilot; historical pilot results describe the earlier interface.
 
-`--discovery explicit` adds a short instruction to consult the CLI runbooks in
-the skills arm. It measures **guided use**, including retrieval overhead.
-`--discovery passive` uses identical prompts in both arms and exposes skills only
-in the treatment CLI help. It measures **availability and discovery**. Do not mix
-these two experiments when reporting improvements.
+All new runs use **discovery-only prompts**: the exact same task is sent in both
+arms, with no mention of skills or runbooks. `--discovery passive` is the default
+and only accepted value. Parent and descendant AKS help expose skill discovery
+only in treatment. Historical reports retain the earlier guided-use labels;
+the explicit prompt-hint mode has been removed from the runner.
 
 The order of the two arms is seeded and shuffled per pair. Cluster/resource-group
 names and capacity targets are seeded, not hardcoded in skill text. Models are
@@ -52,6 +52,9 @@ list of the most common AKS tickets. Original sources were retrieved on November
 | `transient-scale` | Fixed-size scaling with a transient service failure | Scaling oracle plus a deterministic first-call 429 | Scaling task above; injected failure is a synthetic robustness test |
 | `automatic-create` | Create Automatic with managed networking and managed system pools | Automatic/Standard SKU-tier, Auto provisioning, stable/NodeImage, correct network defaults and verification | [Automatic quickstart](https://learn.microsoft.com/en-us/azure/aks/automatic/quick-automatic-managed-network) |
 | `automatic-maintenance` | Reschedule Kubernetes and node-image auto-upgrades independently | Two correct weekly windows; default window and cluster unchanged; both schedules observed | [Planned maintenance](https://learn.microsoft.com/en-us/azure/aks/planned-maintenance) |
+| `debug-version-skew` | Repair a failed apps-pool upgrade | Correct control-plane/pool versions, recovered pool, unchanged system pool and counts | [Version incompatibility](https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/error-codes/nodepoolmcversionincompatible-error) |
+| `debug-automatic-provider` | Repair failed Automatic creation | Required provider registered; valid Automatic cluster created and verified | [Provider registration errors](https://learn.microsoft.com/en-us/azure/azure-resource-manager/troubleshooting/error-register-resource-provider) |
+| `debug-managed-namespace-quota` | Restore a stalled four-replica rollout | Approved ARM-managed quota, four ready replicas, unchanged other quotas/policies | [Managed namespaces](https://learn.microsoft.com/en-us/azure/aks/managed-namespaces) |
 
 Important semantics captured from those sources: manual scaling conflicts with
 an enabled autoscaler; `--control-plane-only` preserves pool versions; node pools
@@ -102,9 +105,16 @@ The host proxy allows CONNECT only to exact configured HTTPS hosts on port 443,
 validates their public IP addresses, and connects to the validated IP. Azure
 management hosts are explicitly forbidden even if accidentally configured as
 providers. The default Copilot allowlist covers api.github.com and Copilot model
-hosts; telemetry destinations and unrelated documentation websites are blocked.
+hosts; telemetry destinations and arbitrary websites are blocked.
 The Foundry allowlist contains only the configured inference host. Private/VNet
 Foundry endpoints are not currently supported by the public-address check.
+
+A separate logged `curl` client provides live GET-only access to approved
+Microsoft Learn documentation paths and its public search endpoint. Requests
+execute through a bounded host fetcher, with redirects confined to approved
+paths; it cannot reach ARM. Both arms have the same docs access. `--docs-mode off`
+disables it. Response bodies and hashes are retained locally for reproducibility.
+This is controlled documentation access, not an unrestricted browser/search engine.
 
 Each container runs a preflight that checks external connectivity is blocked,
 the proxy denies ARM, and host home/Azure CLI/credentials/fixture paths are absent.
@@ -128,11 +138,14 @@ installed Azure CLI 2.86.0 ACS module. It excludes extensions such as aks-previe
 and aks-agent. `bench/capture_commands.py` refreshes this snapshot offline using
 Azure CLI's own Python; it never runs a resource operation.
 
-The simulator currently has stateful handlers for **28 AKS commands**: cluster
+The simulator currently has stateful handlers for **31 AKS commands**: cluster
 list/show/create/delete/update/scale/start/stop/upgrade/version discovery/wait,
 and the analogous supported nodepool operations, plus maintenanceconfiguration
-list/show/add/update/delete. Three auxiliary inspection commands (`group show`,
-`group exists`, `provider show`) have fixtures. Handlers implement the options
+list/show/add/update/delete and namespace list/show/update. Five auxiliary commands
+(`group show`, `group exists`, `provider show/list/register`) have fixtures.
+A bounded fake kubectl models deployment status, quota/events inspection, managed
+field rejection, scaling and rollout verification for the quota scenario.
+Handlers implement the options
 needed for these workflows, not Azure's entire validation/defaulting/API contract.
 For example, there is no real scheduler, VM provisioning, admission controller,
 PDB drain model, auth system, quota service or regional capacity simulation.
@@ -217,6 +230,12 @@ Each trial retains:
   bodies or authentication headers are logged by the proxy.
 - `result.json`: state checks, final success, call counts, failure/coverage status.
 
+The legacy filename `az-events.jsonl` now also holds kubectl and curl events;
+the `tool` field distinguishes them. `documentation_http_requests` counts actual
+host-side HTTP attempts (including permitted redirects), separately from modeled
+Azure and Kubernetes calls. `documents/` stores returned public documentation.
+Empty doc counts mean no lookup was observed, not that skills saved a lookup.
+
 The mock logs distinct quantities:
 
 1. **CLI invocations:** all `az` calls, including local help and skill retrieval.
@@ -274,7 +293,7 @@ path for `--bwrap` below. No system service or privileged installation was neede
   --bwrap /tmp/opencode/bubblewrap/usr/bin/bwrap \
   --model gpt-6.1-sol --scenarios manual-scale stop-dev \
   --repeats 3 --seed 10 --timeout 180 \
-  --output benchmark-results/sol-explicit
+  --output benchmark-results/sol-discovery
 ```
 
 The runner uses `COPILOT_GITHUB_TOKEN`, `GH_TOKEN`, or `GITHUB_TOKEN` if supplied;
@@ -285,7 +304,7 @@ Copilot executable. This does not copy an entire personal configuration director
 An npm JavaScript launcher needs its runtime/dependencies packaged separately;
 the current container path is tested with the standalone binary.
 
-For passive discovery, use a separate output directory and `--discovery passive`.
+Discovery-only is automatic; `--discovery passive` remains accepted for clarity.
 For another model, use `--model EXACT-COPILOT-MODEL-ID`. Unsupported model IDs are
 reported as failures, not replaced with another model. The same seed across model
 runs gives matched scenario inputs, but models should be analyzed separately.
@@ -345,11 +364,11 @@ The fixed mock delays are deliberately short. Increase `--latency-scale` for a
 sensitivity run, but label it simulated latency. Real AKS operations take minutes
 and can hide or amplify model/retrieval overhead; do not extrapolate pilot seconds
 to Azure end-to-end deployment time. The baseline has CLI help and model knowledge
-but no arbitrary web access, so this experiment does not yet measure replacement
-of live documentation browsing by local skills.
+but no arbitrary web access. Compare observed controlled Microsoft Learn lookups
+with skill reads; do not infer avoided browsing if the baseline never fetches docs.
 
 Next coverage increments should be driven by observed gaps: node-image upgrades,
 quota/capacity errors, add-on identity/permission failures, maintenance windows,
-and read-only pod diagnostics. Kubernetes-level tasks need a separate fake
-`kubectl` and workload state model before they can be scored credibly. Preserve
+and read-only pod diagnostics. The current fake kubectl covers only the managed
+quota rollout scenario; other Kubernetes tasks need additional state modeling. Preserve
 old trials and use new output directories when changing skills or CLI affordances.

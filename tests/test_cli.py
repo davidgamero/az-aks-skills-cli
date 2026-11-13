@@ -138,6 +138,32 @@ class ShimTests(unittest.TestCase):
                 self.assertEqual(result.returncode, 23)
                 self.assertEqual(json.loads(result.stdout)["args"], args)
 
+    def test_aks_help_overlay_preserves_real_help_and_errors(self):
+        self.fake.write_text(
+            f"#!{sys.executable}\nimport os, sys\n"
+            "print('Group\\n    az aks : Azure Kubernetes Service.\\n\\nSubgroups:\\n    nodepool : Manage pools.\\n\\nCommands:\\n    show : Show a cluster.\\n')\n"
+            "print('real help warning', file=sys.stderr)\n"
+            "sys.exit(int(os.environ.get('HELP_EXIT', '0')))\n")
+        for args in (["aks", "--help"], ["aks", "-h"], ["aks", "nodepool", "--help"], ["aks", "create", "--help"]):
+            with self.subTest(args=args):
+                result = self.invoke(*args)
+                self.assertEqual(result.returncode, 0)
+                self.assertIn("Show a cluster.", result.stdout)
+                self.assertIn("skills" if len(args) == 2 else "az aks skill", result.stdout)
+                self.assertEqual(result.stderr, "real help warning\n")
+        self.env["HELP_EXIT"] = "4"
+        result = self.invoke("aks", "--help")
+        self.assertEqual(result.returncode, 4)
+        self.assertNotIn("skill", result.stdout)
+
+    def test_help_overlay_is_idempotent(self):
+        sys.path.insert(0, str(ROOT / "src"))
+        from az_aks_skills_cli.help_overlay import patch_aks_help
+        for text in ("Group\n    az aks : AKS.\n\nCommands:\n    list : List.\n", "Group\n    az aks : AKS.\n"):
+            once = patch_aks_help(text)
+            self.assertEqual(patch_aks_help(once), once)
+            self.assertIn("Subgroups:", once)
+
     def path_env(self):
         env = self.env.copy()
         env.pop("AZ_AKS_REAL_AZ", None)

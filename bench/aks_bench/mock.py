@@ -15,8 +15,11 @@ import jmespath
 
 from .scenarios import grade
 from . import automatic
+from . import troubleshooting, documentation
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT.parent / "src"))
+from az_aks_skills_cli.help_overlay import patch_aks_help
 COMMANDS = json.loads((ROOT / "commands.json").read_text())["commands"]
 SEMANTIC = {
     "aks list", "aks show", "aks create", "aks delete", "aks scale", "aks update",
@@ -26,20 +29,22 @@ SEMANTIC = {
     "aks nodepool start", "aks nodepool stop", "aks nodepool wait",
     "aks maintenanceconfiguration add", "aks maintenanceconfiguration update",
     "aks maintenanceconfiguration delete", "aks maintenanceconfiguration list", "aks maintenanceconfiguration show",
+    "aks namespace list", "aks namespace show", "aks namespace update",
 }
-AUXILIARY = {"group show", "group exists", "provider show"}
+AUXILIARY = {"group show", "group exists", "provider show", "provider list", "provider register"}
 ALIASES = {"-g": "--resource-group", "-n": "--name", "-o": "--output", "-l": "--location", "-y": "--yes", "-h": "--help", "-k": "--kubernetes-version"}
 FLAGS = {"--yes", "--help", "--version", "--debug", "--verbose", "--only-show-errors", "--no-wait",
          "--control-plane-only", "--enable-cluster-autoscaler", "--disable-cluster-autoscaler",
          "--update-cluster-autoscaler", "--generate-ssh-keys", "--updated", "--created", "--deleted", "--exists",
-         "--enable-hosted-system", "--enable-managed-identity"}
+         "--enable-hosted-system", "--enable-managed-identity", "--wait"}
 VALUES = {"--resource-group", "--name", "--cluster-name", "--nodepool-name", "--node-count", "--min-count",
           "--max-count", "--kubernetes-version", "--output", "--query", "--subscription", "--location",
           "--mode", "--node-vm-size", "--interval", "--timeout", "--custom", "--sku", "--tier",
           "--node-provisioning-mode", "--auto-upgrade-channel", "--node-os-upgrade-channel",
           "--network-plugin", "--network-plugin-mode", "--network-dataplane", "--network-policy", "--outbound-type",
           "--schedule-type", "--day-of-week", "--interval-weeks", "--duration", "--start-time", "--utc-offset",
-          "--start-date", "--namespace"}
+          "--start-date", "--namespace", "--cpu-request", "--cpu-limit", "--memory-request", "--memory-limit",
+          "--ingress-policy", "--egress-policy"}
 
 
 class CLIError(Exception):
@@ -108,7 +113,7 @@ def render(value, options):
 
 
 class Simulator:
-    def __init__(self, scenario, skills=False, log_path=None, latency_scale=1.0):
+    def __init__(self, scenario, skills=False, log_path=None, latency_scale=1.0, docs_mode="off"):
         self.scenario = copy.deepcopy(scenario)
         self.state = copy.deepcopy(scenario["state"])
         self.skills = skills
@@ -120,9 +125,10 @@ class Simulator:
         self.first_goal_s = None
         self.verified_goal_s = None
         self.maintenance_observations = {}
+        self.docs_mode = docs_mode
 
     def state_hash(self):
-        return hashlib.sha256(json.dumps(self.state["clusters"], sort_keys=True).encode()).hexdigest()
+        return hashlib.sha256(json.dumps({"clusters": self.state["clusters"], "providers": self.state.get("providers")}, sort_keys=True).encode()).hexdigest()
 
     def advance(self):
         now = time.monotonic()
@@ -134,17 +140,20 @@ class Simulator:
                 remaining.append(operation)
         self.state["pending"] = remaining
 
-    def call(self, argv):
+    def call(self, argv, tool="az"):
+        if tool != "az":
+            return self.external_call(tool, argv)
         with self.lock:
             start = time.monotonic()
             self.advance()
             before = self.state_hash()
             event = {"sequence": len(self.events) + 1, "started_at": time.time(),
-                     "start_s": start - self.started, "argv": argv, "command": "",
+                     "start_s": start - self.started, "argv": argv, "command": "", "tool": "az",
                      "category": "local", "modeled_api_requests": 0, "http_status": None}
             response = {"stdout": "", "stderr": "", "exit_code": 0}
             snapshot = copy.deepcopy(self.state["clusters"])
             pending_snapshot = copy.deepcopy(self.state["pending"])
+            providers_snapshot = copy.deepcopy(self.state.get("providers"))
             opts = {}
             try:
                 command, opts = parse(argv)
@@ -219,6 +228,10 @@ class Simulator:
             except CLIError as error:
                 self.state["clusters"] = snapshot
                 self.state["pending"] = pending_snapshot
+                if providers_snapshot is not None:
+                    self.state["providers"] = providers_snapshot
+                else:
+                    self.state.pop("providers", None)
                 response.update(stderr=f"ERROR: ({error.code}) {error}\n", exit_code=error.exit_code)
                 event.update(error_code=error.code, http_status=error.status or None)
                 if error.code.startswith("Mock"):
@@ -226,6 +239,10 @@ class Simulator:
             except (ValueError, KeyError, TypeError) as error:
                 self.state["clusters"] = snapshot
                 self.state["pending"] = pending_snapshot
+                if providers_snapshot is not None:
+                    self.state["providers"] = providers_snapshot
+                else:
+                    self.state.pop("providers", None)
                 response.update(stderr=f"ERROR: (ArgumentError) {error}\n", exit_code=2)
                 event["error_code"] = "ArgumentError"
             end = time.monotonic()
@@ -233,7 +250,7 @@ class Simulator:
             if goal and self.first_goal_s is None:
                 self.first_goal_s = end - self.started
             read = event["command"] == "aks show"
-            if self.scenario["name"] in ("manual-scale", "transient-scale", "autoscaler"):
+            if self.scenario["name"] in ("manual-scale", "transient-scale", "autoscaler", "debug-version-skew"):
                 read = read or event["command"] == "aks nodepool list" or (
                     event["command"] == "aks nodepool show" and
                     opts.get("--name", opts.get("--nodepool-name")) == "apps")
@@ -246,6 +263,8 @@ class Simulator:
                         self.maintenance_observations[opts["--name"]] = copy.deepcopy(configs[opts["--name"]])
                 read = all(name in configs and self.maintenance_observations.get(name) == configs[name]
                            for name in (automatic.AUTO_SCHEDULE, automatic.OS_SCHEDULE))
+            if self.scenario["name"] == "debug-managed-namespace-quota":
+                read = False  # A Kubernetes workload read must verify the repaired rollout.
             if goal and response["exit_code"] == 0 and read and response["stdout"].strip():
                 self.verified_goal_s = self.verified_goal_s or end - self.started
             event.update(end_s=end - self.started, duration_ms=(end - start) * 1000,
@@ -257,8 +276,75 @@ class Simulator:
                     stream.write(json.dumps(event) + "\n")
             return response
 
+    def external_call(self, tool, argv):
+        with self.lock:
+            start = time.monotonic()
+            self.advance()
+            snapshot = copy.deepcopy(self.state["clusters"])
+            event = {"sequence": len(self.events) + 1, "started_at": time.time(), "start_s": start - self.started,
+                     "argv": argv, "tool": tool, "command": " ".join([tool, *argv[:2]]),
+                     "category": "documentation" if tool == "curl" else "kubernetes",
+                     "modeled_api_requests": 0, "modeled_kubernetes_requests": 0,
+                     "documentation_http_requests": 0, "state_before": self.state_hash()}
+            response = {"stdout": "", "stderr": "", "exit_code": 0}
+            verified = False
+            try:
+                if tool == "curl":
+                    if self.docs_mode != "live":
+                        raise ValueError("documentation access is disabled for this trial")
+                    directory = self.log_path.parent / "documents" if self.log_path else None
+                    response["stdout"], metadata = documentation.fetch(argv, directory, metrics=event)
+                    event.update(metadata)
+                elif tool == "kubectl":
+                    if not self.state["clusters"]:
+                        raise CLIError("MockNotImplemented", "no Kubernetes fixture is available", 0, 2)
+                    event["modeled_kubernetes_requests"] = 1
+                    response["stdout"], verified = troubleshooting.kubectl(self.state["clusters"][0], argv, CLIError)
+                else:
+                    raise ValueError("unsupported benchmark tool")
+            except CLIError as error:
+                self.state["clusters"] = snapshot
+                response.update(stderr=f"Error ({error.code}): {error}\n", exit_code=error.exit_code)
+                event.update(error_code=error.code, http_status=error.status)
+                if error.code.startswith("Mock"):
+                    event["category"] = "coverage_gap"
+                    event["modeled_kubernetes_requests"] = 0
+            except (OSError, ValueError) as error:
+                self.state["clusters"] = snapshot
+                response.update(stderr=f"{tool}: {error}\n", exit_code=22 if tool == "curl" else 2)
+                event["error_code"] = "DocumentationError" if tool == "curl" else "ArgumentError"
+                event["http_status"] = getattr(error, "code", None)
+            end = time.monotonic()
+            goal = grade(self.scenario, self.state)["success"]
+            if goal:
+                self.first_goal_s = self.first_goal_s or end - self.started
+                if verified and response["exit_code"] == 0:
+                    self.verified_goal_s = self.verified_goal_s or end - self.started
+            event.update(end_s=end - self.started, duration_ms=(end - start) * 1000,
+                         exit_code=response["exit_code"], state_after=self.state_hash(), goal_satisfied=goal,
+                         stdout_bytes=len(response["stdout"].encode()))
+            self.events.append(event)
+            if self.log_path:
+                with self.log_path.open("a") as stream:
+                    stream.write(json.dumps(event) + "\n")
+            return response
+
     def help(self, command):
-        names = COMMANDS + (["aks skill list", "aks skill search", "aks skill show"] if self.skills else [])
+        text = self.base_help(command)
+        if command.startswith("aks namespace"):
+            text += "\nReference: " + documentation.NAMESPACE_URL + "\n"
+        elif command in ("aks upgrade", "aks nodepool upgrade"):
+            text += "\nReference: " + documentation.VERSION_URL + "\n"
+        elif command == "aks create":
+            text += "\nReference: " + documentation.PROVIDER_URL + "\n"
+        return patch_aks_help(text, command) if self.skills and (command == "aks" or command.startswith("aks ")) else text
+
+    def base_help(self, command):
+        if command == "":
+            return "Group\n    az : Azure command-line interface.\n\nSubgroups:\n    aks : Azure Kubernetes Service.\n    account : Manage subscription information.\n"
+        if command.startswith("aks namespace "):
+            return (f"Command: az {command}\nArguments: --resource-group -g; --cluster-name; --name -n; "
+                    "--cpu-request; --cpu-limit; --memory-request; --memory-limit; --ingress-policy; --egress-policy; --query; --output -o\n")
         if command.startswith("aks maintenanceconfiguration "):
             return (f"Command: az {command}\nArguments: --resource-group -g; --cluster-name; --name -n; "
                     "--schedule-type Weekly; --day-of-week; --interval-weeks; --duration (4-24 hours); "
@@ -272,8 +358,16 @@ class Simulator:
                     ("Automatic arguments: --sku {base,automatic}; --tier {free,standard,premium}; "
                      "--enable-hosted-system; --node-provisioning-mode; --auto-upgrade-channel; "
                      "--node-os-upgrade-channel\n" if command in ("aks create", "aks update") else ""))
-        prefix = command + " " if command else ""
-        return "Commands:\n" + "\n".join("  az " + c for c in names if c.startswith(prefix)) + "\n"
+        prefix = command + " "
+        children = [c[len(prefix):] for c in COMMANDS if c.startswith(prefix)]
+        groups = sorted({c.split()[0] for c in children if " " in c})
+        leaves = sorted(c for c in children if " " not in c)
+        text = f"Group\n    az {command} : Azure Kubernetes Service commands.\n\n"
+        if groups:
+            text += "Subgroups:\n" + "".join(f"    {g:<26} : Manage {g.replace('-', ' ')}.\n" for g in groups) + "\n"
+        if leaves:
+            text += "Commands:\n" + "".join(f"    {c:<26} : {c.replace('-', ' ').capitalize()}.\n" for c in leaves) + "\n"
+        return text
 
     def execute(self, command, options):
         def need(key):
@@ -290,19 +384,26 @@ class Simulator:
             if not group:
                 raise CLIError("ResourceGroupNotFound", f"resource group '{name}' not found", 404)
             return group
-        if command == "provider show":
+        if command in ("provider show", "provider register", "provider list"):
+            providers = self.state.get("providers", {"Microsoft.ContainerService": "Registered", "Microsoft.PolicyInsights": "Registered"})
+            if command == "provider list":
+                return [{"namespace": ns, "registrationState": state} for ns, state in providers.items()]
             namespace = need("--namespace")
             if namespace not in ("Microsoft.ContainerService", "Microsoft.PolicyInsights"):
                 raise CLIError("MockNotImplemented", f"provider fixture not available for {namespace}", 0, 2)
-            return {"namespace": namespace, "registrationState": "Registered"}
+            if command == "provider register":
+                self.state.setdefault("providers", dict(providers))[namespace] = "Registered"
+                providers = self.state["providers"]
+            return {"namespace": namespace, "registrationState": providers[namespace]}
         if command == "aks list":
             return [c for c in self.state["clusters"] if not options.get("--resource-group") or c["resourceGroup"] == options["--resource-group"]]
         if command == "aks get-versions":
             return {"values": [{"version": v, "isPreview": False} for v in self.state["upgrades"]]}
         nodepool = command.startswith("aks nodepool ")
         maintenance = command.startswith("aks maintenanceconfiguration ")
+        namespace = command.startswith("aks namespace ")
         rg = need("--resource-group")
-        name = need("--cluster-name" if nodepool or maintenance else "--name")
+        name = need("--cluster-name" if nodepool or maintenance or namespace else "--name")
         cluster = next((c for c in self.state["clusters"] if c["name"] == name and c["resourceGroup"] == rg), None)
         if command == "aks create":
             if cluster:
@@ -318,6 +419,8 @@ class Simulator:
             if sku not in ("base", "automatic"):
                 raise CLIError("InvalidParameter", "sku must be base or automatic")
             if sku == "automatic":
+                if self.state.get("providers", {}).get("Microsoft.PolicyInsights", "Registered") != "Registered":
+                    raise CLIError("MissingSubscriptionRegistration", "The subscription is not registered to use namespace Microsoft.PolicyInsights. " + documentation.PROVIDER_URL)
                 self.validate_automatic_options(options)
                 template = automatic.automatic_defaults(template)
                 self.state["clusters"].append(template)
@@ -348,6 +451,8 @@ class Simulator:
             raise CLIError("OperationNotAllowed", "start the stopped cluster before changing it", 409)
         if maintenance:
             return self.maintenance(cluster, action, options)
+        if namespace:
+            return troubleshooting.namespace_command(cluster, action, options, CLIError)
         if command == "aks delete":
             self.state["clusters"].remove(cluster)
             return None
@@ -435,8 +540,8 @@ class Simulator:
                 raise CLIError("KubernetesVersionNotSupported", "target is not in the available upgrade list")
             if nodepool:
                 if tuple(map(int, version.split("."))) > tuple(map(int, cluster["kubernetesVersion"].split("."))):
-                    raise CLIError("NodePoolMcVersionIncompatible", "upgrade the control plane first")
-                target.update(orchestratorVersion=version, currentOrchestratorVersion=version)
+                    raise CLIError("NodePoolMcVersionIncompatible", f"Node pool version {version} is greater than control plane version {cluster['kubernetesVersion']}. " + documentation.VERSION_URL)
+                target.update(orchestratorVersion=version, currentOrchestratorVersion=version, provisioningState="Succeeded")
             else:
                 if options.get("--control-plane-only") and cluster["autoUpgradeProfile"].get("upgradeChannel") not in (None, "none"):
                     raise CLIError("OperationNotAllowed", "control-plane-only is incompatible with cluster autoupgrade")

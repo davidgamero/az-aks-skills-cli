@@ -4,6 +4,7 @@ import copy
 import random
 
 from . import automatic
+from . import troubleshooting
 
 
 SOURCES = {
@@ -12,7 +13,7 @@ SOURCES = {
     "upgrade": "https://learn.microsoft.com/en-us/azure/aks/upgrade-aks-control-plane",
     "stop": "https://learn.microsoft.com/en-us/azure/aks/start-stop-cluster",
 }
-NAMES = ("manual-scale", "autoscaler", "control-plane-upgrade", "stop-dev", "transient-scale") + automatic.NAMES
+NAMES = ("manual-scale", "autoscaler", "control-plane-upgrade", "stop-dev", "transient-scale") + automatic.NAMES + troubleshooting.NAMES
 
 
 def make(name: str, seed: int = 1) -> dict:
@@ -20,6 +21,9 @@ def make(name: str, seed: int = 1) -> dict:
         raise ValueError(f"unknown scenario: {name}")
     if name in automatic.NAMES:
         return automatic.make(name, seed, make("manual-scale", seed))
+    if name in troubleshooting.NAMES:
+        base_name = "automatic-create" if name == "debug-automatic-provider" else "manual-scale"
+        return troubleshooting.make(name, seed, make(base_name, seed))
     rng = random.Random(seed)
     suffix = rng.randrange(1000, 9999)
     rg, cluster_name = f"rg-dev-{suffix}", f"aks-dev-{suffix}"
@@ -69,6 +73,8 @@ def make(name: str, seed: int = 1) -> dict:
 
 
 def grade(scenario: dict, state: dict) -> dict:
+    if scenario["name"] in troubleshooting.NAMES:
+        return troubleshooting.grade(scenario, state)
     if scenario["name"] in automatic.NAMES:
         return automatic.grade(scenario, state)
     initial = scenario["initial_state"]["clusters"][0]
