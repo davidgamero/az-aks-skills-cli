@@ -159,6 +159,8 @@ valid matched pairs and the observed help-to-skill discovery path.
 
 The [skill coverage and tuning guide](docs/skill-catalog-tuning.md) explains the
 nine benchmark skills and the original-versus-revised content comparison.
+The [discovery trace review](docs/skill-discovery-review.md) shows when the agent
+encounters the help entry, chooses a skill, or proceeds without one.
 To inspect that catalog directly:
 
 ```sh
