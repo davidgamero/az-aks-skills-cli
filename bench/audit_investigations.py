@@ -19,7 +19,7 @@ def main():
         original=json.loads(path.read_text());old=json.loads((path.parent/"scenario.json").read_text())
         state=json.loads((path.parent/"final-state.json").read_text())
         if old.get("suite")!="investigation-v1": raise ValueError("only investigation trials can be audited")
-        current=make(old["name"],old["seed"])
+        current=json.loads(json.dumps(make(old["name"],old["seed"])))
         # A scoring-only audit cannot silently change evidence, task or starting state.
         for field in ("prompt","context","initial_state"):
             if old[field]!=current[field]: raise ValueError("fixture changed: "+field)
