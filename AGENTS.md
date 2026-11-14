@@ -21,7 +21,10 @@ Run its tests with:
 Keep replay evidence distinct from live model trials, and modeled API counts
 distinct from measured model traffic. Do not commit raw benchmark artifacts.
 Benchmark prompts must be identical across arms and must not advertise skills.
-Discovery is through CLI help. Keep live documentation GETs separate from modeled
+Default discovery is through CLI help. The explicit investigation `discover`
+experiment also tests related-skill references in diagnostic/help stderr, with
+identical prompts and evidence and unchanged data stdout/exit status.
+Keep live documentation GETs separate from modeled
 Azure/Kubernetes requests; container curl and kubectl must use the logged clients.
 
 Worktree layout: `main/` is the primary checkout; sibling directories are linked

@@ -2,6 +2,7 @@
   "schema_version": 1,
   "reviewed_on": "2026-11-13",
   "snapshot_directory": "benchmark-results/investigation-sources-20261113",
+  "snapshot_manifest_sha256": "ecef63b6f26015f19c6994754a3c8d38a8c2d4c99f3343a24f14861195e07b7c",
   "notes": "Azure/AKS-Skills is deprecated. Current skills are mirrored from GitHub-Copilot-for-Azure into microsoft/skills. Procedures below inform independently authored benchmark skills; source contents are not scenario answers.",
   "sources": [
     {"id":"aks-skills-readme","url":"https://raw.githubusercontent.com/Azure/AKS-Skills/7fac4bc786f0bca2a353a92e100f72a132111ef6/README.md"},

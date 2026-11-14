@@ -169,6 +169,11 @@ compares baseline, AKS-help discovery and contextual diagnostic references using
 identical prompts and evidence. Two new investigation procedures bring the catalog
 to 27 skills. The source review includes Azure/AKS-Skills, its maintained Microsoft
 successor and relevant Learn documentation.
+In the latest seven-case smoke comparison, contextual references produced **4/7
+skill reads versus 0/7 with help-only discovery**. Baseline agents still identified
+all seven causes/candidates; the result supports the discovery surface, not a
+claim that the tasks require skills. The report preserves the live runs and an
+explicit, separate evidence-rubric audit.
 
 The [skill coverage and tuning guide](docs/skill-catalog-tuning.md) explains the
 original nine benchmark skills and the original-versus-revised content comparison.

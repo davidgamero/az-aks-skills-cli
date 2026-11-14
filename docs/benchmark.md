@@ -36,7 +36,9 @@ pilot; historical pilot results describe the earlier interface.
 All new runs use **discovery-only prompts**: the exact same task is sent in both
 arms, with no mention of skills or runbooks. `--discovery passive` is the default
 and only accepted value. Parent and descendant AKS help expose skill discovery
-only in treatment. Historical reports retain the earlier guided-use labels;
+only in treatment. The explicit `discover` experiment additionally compares
+contextual diagnostic references on stderr; `run` retains help-only discovery.
+Historical reports retain the earlier guided-use labels;
 the explicit prompt-hint mode has been removed from the runner.
 
 The order of the two arms is seeded and shuffled per pair. Cluster/resource-group
