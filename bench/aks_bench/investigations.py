@@ -123,7 +123,7 @@ def make(name, seed, base):
         resident["status"]={"phase":"Running","conditions":[{"type":"Ready","status":"True"}]};put(resident)
         context["comparison_node"]=None
         context["evidence_sources"]["node_diagnostics"].pop(peer)
-        cause,action="gpu_family_quota","request_exact_family_quota";needed={"workspace","operation","quota","sku"}
+        cause,action="gpu_family_quota","request_exact_family_quota";needed={"workspace","operation","quota"}
     if p["status"]["phase"]=="Pending":
         p["status"]["containerStatuses"]=[{"name":"server","ready":False,"restartCount":0,"state":{"waiting":{"reason":"ContainerCreating"}}}]
         facts["previous"]="No previous container instance exists; workload has not started"
@@ -154,6 +154,10 @@ def grade(scenario, state):
     expected=scenario["investigation"]["oracle"]
     context=scenario["context"]
     observations=state.get("_incident_observations",[])
+    alternatives=report.get("alternatives",[])
+    if isinstance(alternatives,list) and all(isinstance(v,str) for v in alternatives):
+        alternatives=[v.partition(":")[0].strip() for v in alternatives]
+    else: alternatives=[]
     cited=set(); quotes_valid=True;unverified=[]
     for citation in report.get("evidence",[]) if isinstance(report.get("evidence"),list) else []:
         authentic,tags,local=verify(citation,observations)
@@ -163,7 +167,7 @@ def grade(scenario, state):
         "target_bound":report.get("scope")=={k:context[k] for k in ("cluster","namespace","pod","node")},
         "incident_window_bound":report.get("incident_window")==context["incident_window"],
         "evidence_quotes_authentic":quotes_valid, "decisive_sources_cited":set(expected["required"])<=cited,
-        "alternatives_considered":isinstance(report.get("alternatives"),list) and all(isinstance(v,str) for v in report["alternatives"]) and len(set(report["alternatives"])-{expected["cause"]})>=2 and all(v in CAUSES and v!=expected["cause"] for v in report["alternatives"]),
+        "alternatives_considered":len(set(alternatives)-{expected["cause"]})>=2 and all(v in CAUSES and v!=expected["cause"] for v in alternatives),
         "appropriate_recommendation":isinstance(report.get("recommendation"),dict) and report["recommendation"].get("action")==expected["action"],
         "confidence_supported":report.get("confidence") in expected["accepted_confidence"], "no_mutation_attempt":not state.get("_incident_mutations",[]),
         "cluster_preserved":state["clusters"]==scenario["initial_state"]["clusters"]}

@@ -157,3 +157,31 @@ class InvestigationTests(unittest.TestCase):
         self.assertEqual(grade(sim.scenario,sim.state)["outcome_kind"],"supported_candidate_with_evidence_gap")
         sim.state["_incident_report"]["confidence"]="confirmed"
         self.assertFalse(grade(sim.scenario,sim.state)["checks"]["confidence_supported"])
+
+    def test_short_scalar_and_named_alternative_explanations_are_valid(self):
+        sim=self.sim("gpu-incident-container-memory");x=sim.scenario["context"]
+        argv=["exec",x["pod"],"-n",x["namespace"],"--","cat","/sys/fs/cgroup/memory.max"]
+        result=sim.call(argv,tool="kubectl");self.solve(sim)
+        import shlex
+        sim.state["_incident_report"]["evidence"].append({"command":shlex.join(["kubectl",*argv]),"quote":result["stdout"].strip()})
+        sim.state["_incident_report"]["alternatives"]=["gpu_device_memory: incident GPU telemetry has headroom", "azure_capacity: workload was already running"]
+        self.assertTrue(grade(sim.scenario,sim.state)["success"])
+
+    def test_single_metric_command_binds_quoted_value(self):
+        from aks_bench.investigation_citations import verify
+        sim=self.sim(NAMES[0]);x=sim.scenario["context"]
+        args=["monitor","metrics","list","--resource",x["evidence_sources"]["load_balancer_id"],"--metric","UsedSnatPorts","--start-time",x["incident_window"]["start"],"--end-time",x["incident_window"]["end"]]
+        sim.call(args)
+        import shlex
+        valid,tags,_=verify({"command":shlex.join(["az",*args]),"quote":'"maximum": 1024'},sim.state["_incident_observations"])
+        self.assertTrue(valid);self.assertEqual(tags,{"snat_usage"})
+
+    def test_quota_operation_is_decisive_without_mandatory_sku_listing(self):
+        sim=self.sim("gpu-incident-kaito-quota")
+        for action in commands(sim.scenario):
+            if isinstance(action,list) and action[:2]==["vm","list-skus"]:continue
+            execute(sim,action)
+        self.assertTrue(grade(sim.scenario,sim.state)["success"])
+        sim.state["_incident_observations"]=[e for e in sim.state["_incident_observations"] if "operation" not in e["signals"]]
+        sim.state["_incident_report"]=report(sim.scenario,sim.state)
+        self.assertFalse(grade(sim.scenario,sim.state)["success"])

@@ -28,7 +28,7 @@ def projections(event):
 def verify(citation, observations):
     if not isinstance(citation,dict) or not isinstance(citation.get("command"),str) or not isinstance(citation.get("quote"),str): return False,set(),False
     quote=citation["quote"]
-    if len(quote)<12: return False,set(),False
+    if not quote.strip(): return False,set(),False
     try:
         lexer=shlex.shlex(citation["command"],posix=True,punctuation_chars=";&|");lexer.whitespace_split=True;lexer.commenters=""
         tokens=list(lexer)
@@ -51,9 +51,9 @@ def verify(citation, observations):
     authentic=any(nquote in normalized(p) for e in matched for p in projections(e)) or nquote in normalized("".join(e["stdout"]+e.get("stderr","") for e in matched))
     if not authentic: return False,set(),False
     cited=set()
-    metric_names={"snat_usage":"UsedSnatPorts","snat_allocation":"AllocatedSnatPorts","snat_failures":"SnatConnectionCount"}
     for event in matched:
         for tag,signals in event.get("signals",{}).items():
-            if tag in metric_names and metric_names[tag] not in quote: continue
+            # The exact recorded command/response binds the metric. Repeating its name
+            # inside a quoted data point is unnecessary, especially for single-metric reads.
             if any(normalized(signal) in nquote for signal in signals): cited.add(tag)
     return True,cited,False
