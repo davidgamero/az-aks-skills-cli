@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-11-16",
+  "snapshot_directory": "benchmark-results/skill-efficacy-sources-20261116",
+  "snapshot_manifest_sha256": "bf34f5f496acb868376c0ce574ed29b032db6b7e49f38ae7789525b1adb573c7",
+  "scope": "Research for problem-class selection and failure-fallback study. External results are not AKS efficacy measurements and are not pooled with local trials.",
+  "sources": [
+    {
+      "id": "skillsbench-v4",
+      "url": "https://arxiv.org/html/2602.12670v4",
+      "title": "SkillsBench: Benchmarking How Well Agent Skills Work Across Diverse Tasks",
+      "version": "v4, 2026-06-14",
+      "evidence_type": "external empirical preprint",
+      "use": "Paired expertise-heavy task evaluation; heterogeneous gains, negative cases, focused modules and procedural content. Not an AKS or CLI-help-discovery study."
+    },
+    {
+      "id": "swe-skills-bench-v2",
+      "url": "https://arxiv.org/html/2603.15401v2",
+      "title": "SWE-Skills-Bench: Do Agent Skills Actually Help in Real-World Software Engineering?",
+      "version": "v2, 2026-10-27",
+      "evidence_type": "external empirical preprint",
+      "use": "Limited aggregate benefit in a different task population; omitted-procedure improvements and template anchoring risk. Do not equate significance with proof of zero effect."
+    },
+    {
+      "id": "agent-skills-architecture",
+      "url": "https://www.anthropic.com/research/equipping-agents-for-the-real-world-with-agent-skills",
+      "title": "Equipping agents for the real world with Agent Skills",
+      "version": "2025-10-16 article; accessed 2026-11-16",
+      "evidence_type": "vendor architecture and authoring guidance",
+      "use": "Startup metadata exposure, progressive disclosure and deterministic script bundles. Distinguish from this repository's unadvertised help-only CLI catalog."
+    },
+    {
+      "id": "arm-throttling",
+      "url": "https://learn.microsoft.com/en-us/azure/azure-resource-manager/management/request-limits-and-throttling",
+      "title": "Understand how Azure Resource Manager throttles requests",
+      "version": "2026-02-27 article; accessed 2026-11-16",
+      "evidence_type": "service behavior documentation",
+      "use": "Response-layer classification, SDK retry caveat and Retry-After. The study injects synthetic 503s, not measured 429 rate limiting."
+    },
+    {
+      "id": "retry-storm",
+      "url": "https://learn.microsoft.com/en-us/azure/architecture/antipatterns/retry-storm/",
+      "title": "Retry Storm antipattern",
+      "version": "accessed 2026-11-16",
+      "evidence_type": "architecture guidance",
+      "use": "Bounded retries, backoff, circuit breaking and safe handoff. Skill retrieval is not automatically preferable to correct failure handling."
+    }
+  ]
+}

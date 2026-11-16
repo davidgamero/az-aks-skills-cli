@@ -11,6 +11,12 @@ This study separates three things that earlier trials conflated:
 
 ### Research reviewed on November 16, 2026
 
+[Five primary-source snapshots](research/skill-efficacy-sources.json) were archived
+with timestamps and SHA-256 hashes under
+`benchmark-results/skill-efficacy-sources-20261116`. Papers are pinned to explicit
+versions; vendor articles are the fetched revisions. The local snapshot manifest
+SHA-256 is `bf34f5f496acb868376c0ce574ed29b032db6b7e49f38ae7789525b1adb573c7`.
+
 - [SkillsBench v4](https://arxiv.org/abs/2602.12670v4) reports heterogeneous gains
   for curated skills on 87 expertise-heavy tasks across eight domains and 18
   model/harness configurations. Its reported aggregate improvement (33.9% to
@@ -49,6 +55,51 @@ This study separates three things that earlier trials conflated:
 | Reusable deterministic computation | Bundled validated code can beat rewriting brittle logic | CIDR/capacity arithmetic, quota accounting, trace reduction | Same tool capability baseline; compare errors/time and input variants |
 | Familiar CRUD or a single named misconfiguration | Little new procedural information | Fixed pool size, obvious role/FIC/alias repair | Existing baseline results suggest low headroom for Sol |
 | Pure transient service/CLI outage | Missing availability, not missing domain knowledge | ARM 503 or repeated CLI exception | Measure safe retries/discovery separately; do not claim skills fix availability |
+
+### What the existing local evaluations establish
+
+| Observation | Supported conclusion | Not established |
+|---|---|---|
+| Earlier primary repair suite: 16/17 versus 17/17 latest audited completions, no reads | Familiar operations offered little measured headroom; availability alone did not elicit content use | That unread skills caused the one-task difference |
+| Latest investigation suite: all seven baseline cause/candidate labels correct | Even the deeper bounded fixtures were within Sol's capabilities | That all real GPU/network investigations are easy or skills have no value |
+| Contextual diagnostic references: 4/7 reads, help-only 0/7 | Actual diagnostic tools can provide a reachable discovery surface | A statistically reliable adoption uplift or a task-success improvement |
+| Earlier provider-recovery sessions retrieved skills after registration was already repaired | Retrieval may support later workflow/verification rather than cause the repair | That the initial error triggered effective fallback before recovery |
+
+These are different development runs and should not be pooled as a single trial
+population. The error ladder adds a controlled manipulation of failure count,
+rather than inferring a threshold from unrelated tasks that happened to fail.
+
+### Recommended capability study after the discovery experiment
+
+The most promising missing information is **specific procedural knowledge**, not
+more errors. Promote a problem class only after a no-skills prescreen shows a
+repeatable omission and a held-out test can verify it. Examples:
+
+- **GitOps-aware stateful recovery:** the easy visible patch is reconciled away;
+  durable recovery requires the source repository and application-level data
+  checks, not just Kubernetes readiness. Score restored state, correct source edit,
+  rollback feasibility and preserved data/availability across the transition.
+- **Evidence collection and reduction:** real, time-indexed packet/metric artifacts
+  include irrelevant nodes and ambiguous symptoms. A reusable collector/parser
+  can reduce mistakes and context volume. Score causal evidence coverage, sensitive
+  data handling, safe collection scope and the cost of obtaining decisive evidence.
+- **Version-sensitive migration:** a workload can be technically running while
+  violating an AKS support/ownership constraint. Evaluate supported eligibility,
+  an executable staged plan and justified blockers across unseen version/profile
+  combinations, not recognition of a single error string.
+
+Use the **same raw documents and executable capabilities** in the control. Compare
+unstructured references with a curated procedure to test organization; compare
+identical procedure bodies across help-only and native metadata exposure to test
+discovery. Providing an exclusive secret answer or extra privileged tool only to
+the skill arm would not isolate procedural benefit. Our print-only CLI catalog
+does not yet measure the full benefit of installed skill packages with bundled
+scripts and references.
+
+A useful reporting decomposition is **exposure → selection → retrieval → correct
+application → task outcome**. Each stage can fail independently. Long prose or an
+overconfident one-path recipe can make a strong baseline worse; a supportable
+blocked outcome should not be punished solely because no mutation was made.
 
 ## Predeclared consecutive-error experiment
 
