@@ -1,5 +1,28 @@
 # Skill usefulness, discoverability and consecutive-error fallback
 
+## Result
+
+**Repeated errors did not cause observable skill fallback in this experiment.**
+We ran **84 live Copilot trials** with requested and observed model `gpt-6.1-sol`.
+After auditing command coverage and failure schedules, **75 trials are valid**,
+including **36 with skills available through ordinary AKS help**. There were:
+
+- **0 skill searches, lists, bare-group requests or content reads** in all 84
+  trials, including invalid runs. An audit of model-requested tools also found no
+  skill-related file searches/reads outside the CLI.
+- **One valid skill-enabled trial** that requested AKS help. It did so after two
+  injected CLI exceptions, received the skill entry in completed tool results,
+  and ignored it. It recovered on eligible Azure call four.
+- **Up to eight consecutive injected failures in valid trials**, without skill
+  retrieval. Larger configured budgets did not guarantee more observed errors:
+  agents often stopped before reaching the scheduled recovery call.
+
+There is **no observed error-count threshold for skill retrieval**. This does not
+mean the threshold is nine, or that a model would never retrieve a skill. It means
+retrieval was not observed within these tasks, error types, sessions and budgets.
+Help requests are not the same as skill requests, and we cannot infer internal
+motivation from tool traces.
+
 ## Questions and research basis
 
 This study separates three things that earlier trials conflated:
@@ -165,4 +188,198 @@ for persistent failure, or `--failure-kinds arm503` for just ARM-style failures.
 `--repeats` uses fresh seeded sessions. Other supported model IDs and Foundry remain
 available; do not combine different models into a single inferred threshold.
 
-Live results will be added after the frozen run and trace review.
+## Live results and audit
+
+### Runs
+
+| Batch | Frozen revision | Seed | Scope | Live trials | Audited valid | Invalid |
+|---|---|---:|---|---:|---:|---:|
+| Initial matrix | `22ae2b3` | 71 | Both tasks, both error types, seven budgets, two conditions | 56 | 48 | 8 |
+| Corrected operation matrix | `d09310d` | 72 | Manual scale, both error types, seven budgets, two conditions | 28 | 27 | 1 |
+| **Total** | | | | **84** | **75** | **9** |
+
+Seven trials had existing simulator command-coverage gaps: multivalue Azure metric
+aggregation syntax, a diagnostic shell bundle containing `date`, or direct ARM
+REST pool reads not implemented in the earlier operation simulator. They remain
+invalid even when the agent later completed its task.
+
+The audit additionally found **two initial manual-scale trials** where a boolean
+autoscaler flag escaped the failure gate. That classifier used a parser which
+expected a value for the flag; the write succeeded while other commands failed.
+Those eight-failure/persistent CLI-error treatment trials are invalid even though
+the original machine results called them valid. The 13-error maximum reported
+during the first inspection came from one of these invalid schedules; **the valid
+maximum is eight**, not 13. Their observations are retained but are not clean
+consecutive-error evidence.
+
+Revision `d09310d` classifies the command prefix independently of option-value
+parsing. A new regression test ensures boolean write flags cannot bypass the gate.
+The entire 28-trial operation matrix was rerun on seed 72, including failures,
+rather than selectively rerunning cells until they pass. Only one rerun was
+invalid, for the unimplemented REST fallback; it was not silently counted as an
+agent failure or success in comparisons.
+
+The separate audit at `7e6421d` checks recorded injection against the intended
+schedule, unchanged state on rejected calls, absence of contextual references and
+visible tool requests. It changes **validity only** for schedule violations. It
+does not rerun inference, change task scoring, rewrite original artifacts or
+replace failures with later successes. Initial and rerun results are reported as
+separate batches, not paired across seeds/revisions.
+
+### Discovery across audited valid trials
+
+| Measure | No skills | Help-discoverable skills |
+|---|---:|---:|
+| Live trials retained | 42 | 42 |
+| Audited valid trials | 39 | 36 |
+| Trials opening AKS help | 2 | 1 |
+| Trials requesting skill commands | 0 | 0 |
+| Trials reading a skill | 0 | 0 |
+| Contextual diagnostic hints | 0 | 0 |
+| Documentation fetch attempts | 0 | 0 |
+
+There were no timeouts. All 84 containers passed their isolation checks. All
+observed model names were `gpt-6.1-sol`; local Copilot CLI was 1.0.98. Within each
+scenario/seed/run, the prompts and complete serialized fixtures were byte-identical
+across conditions and failure budgets. Failure configuration stayed outside the
+agent's public context. The catalog was unchanged from the investigation study.
+
+### After how many errors did help or skills appear?
+
+Each row counts only valid skill-enabled trials from the two batches. The number
+of trials varies because the second batch repeats only the operation task and
+invalid cells remain excluded. These counts are descriptive, not a population
+adoption probability or independent repetitions of one identical task.
+
+| Configured initial failures | First normally dispatched eligible call | Valid skill-enabled trials | Injected failures actually observed | Trials opening AKS help | Skill seeks / reads |
+|---|---:|---:|---|---:|---:|
+| 0 | 1 | 6 | 0 | 0 | 0 / 0 |
+| 1 | 2 | 4 | 1 | 0 | 0 / 0 |
+| 2 | 3 | 5 | 2 | 0 | 0 / 0 |
+| 3 | 4 | 6 | 3 | 1, after error 2 | 0 / 0 |
+| 5 | 6 | 5 | 5 | 0 | 0 / 0 |
+| 8 | 9 | 5 | 6–7 | 0 | 0 / 0 |
+| Persistent | Never | 5 | 5–8 | 0 | 0 / 0 |
+
+In the configured-eight treatment trials that remained valid, the agent did not
+reach recovery call nine. The persistent CLI-error treatment on seed 72 observed
+eight failures and stopped with a blocked report. In the first batch, a baseline
+also requested help after two CLI errors under persistent failure, but had no
+skill entry available. In the corrected batch another baseline opened help after
+two errors and recovered on call three. **Two errors sometimes preceded help; they
+did not establish a help or skill-use threshold.**
+
+### Corrected manual-scale matrix: seed 72
+
+**B/H = no skills / help-discoverable skills.** “Blocked” means the requested state
+was not achieved/verified, not that stopping was necessarily an operational error.
+Calls are permitted to dispatch normally after the budget; a subsequent argument
+or coverage error can still fail, so permission to recover is not guaranteed task
+completion. Task outcome and discovery outcome are separate.
+
+| Fail first | Recovery permitted on call | ARM-style outcome B/H | ARM errors observed B/H | CLI-exception outcome B/H | CLI errors observed B/H |
+|---|---:|---|---|---|---|
+| 0 | 1 | Pass / Pass | 0 / 0 | Pass / Pass | 0 / 0 |
+| 1 | 2 | Pass / Pass | 1 / 1 | Pass / Pass | 1 / 1 |
+| 2 | 3 | Pass / Pass | 2 / 2 | Pass / Pass | 2 / 2 |
+| 3 | 4 | Pass / Pass | 3 / 3 | Pass / Pass | 3 / 3 |
+| 5 | 6 | Pass / Blocked | 5 / 5 | Pass / Invalid coverage | 5 / 5 |
+| 8 | 9 | Blocked / Blocked | 6 / 6 | Blocked / Blocked | 8 / 7 |
+| Persistent | Never | Blocked / Blocked | 7 / 5 | Blocked / Blocked | 7 / 8 |
+
+Every cell had zero skill requests. The five-error ARM treatment stopped at the
+last injected error without sending the next permitted call. Some other trials
+tried alternative command spellings or direct REST rather than continuing the
+same operation. These behaviors make “retry number” ambiguous without specifying
+the shared eligible-call budget; the experiment logs exact argv and command families.
+
+### Exact observed help route, without skill retrieval
+
+`manual-scale-72-cli_error-f3-help`:
+
+```text
+ 5.93s  Azure call 1: nodepool list → CLI exception
+ 7.78s  Azure call 2: nodepool show → CLI exception
+ 9.95s  account show → success (local fixture, outside gate)
+ 9.98s  az --version → success
+12.71s  az aks nodepool --help → success, skill entry advertised
+17.55s  Azure call 3: aks show → CLI exception
+17.56s  nodepool update --help and scale --help → success, skill entries advertised
+20.79s  Azure call 4: disable autoscaler → success
+22.93s  Azure call 5: scale pool → success
+25.31s  Azure call 6: verify pools → success
+```
+
+The completed model-visible tool results contain the normal Related Commands
+footer **before later model requests**. This is actual delivered exposure, not
+merely the existence of an overlay or a preplanned help-and-skill shell command.
+The agent never requested list/search/show or searched local skill files.
+
+### Investigation failures are not all bad reasoning
+
+In the seed-71 networking runs, several reports after recovered service calls
+identified SNAT pressure but failed the existing exact-citation/evidence rubric.
+Their original scores are retained; they are not evidence that the diagnosis was
+wrong, nor evidence of skill benefit. No content was retrieved in either condition.
+
+When historical ARM metrics never became available, an agent wrote an unconfirmed
+report: connection establishment was failing, DNS evidence looked healthy, and
+SNAT remained plausible but unproven without incident usage/allocation/failure
+metrics. It recommended collecting those metrics rather than changing the cluster.
+That is an appropriate epistemic boundary even though the task's confirmed-diagnosis
+oracle does not pass. A skill cannot truthfully replace unavailable evidence.
+
+## Interpretation and next decisions
+
+1. **Do not rely on repeated failures as a discovery mechanism.** More failures
+   mostly produced retries, alternate commands, environment/version checks, direct
+   REST attempts, or a blocked report—not catalog exploration.
+2. **Discovery still depends on prior visibility.** Only one of 36 valid
+   skill-enabled trials encountered AKS help. That one ignored the entry. Native
+   installed-skill metadata, a catalog entry in a tool schema, and contextual
+   references are distinct interfaces and need their own controls.
+3. **A content test needs a real procedural gap.** The current frontier-model
+   baselines often know the task. Prioritize organization-specific recovery,
+   validated evidence tooling and version/ownership-dependent workflows. Keep raw
+   evidence and capabilities available to both arms, then evaluate held-out cases.
+4. **No universal retry threshold was found.** We tested one model/harness, two
+   tasks and a limited seed frame. It would be unjustified to say “the model uses
+   skills after N failures” or “the threshold is greater than eight.” It may stop,
+   never consider this unadvertised catalog, or behave differently in another host.
+5. **Do not manufacture usefulness by injecting more outages.** For pure availability
+   failures, a correct bounded retry/circuit-breaker policy is a better success
+   criterion than mandatory skill use. If testing discovery, measure exposure,
+   seeking and retrieval independently of task repair.
+
+Compared with the earlier explicit contextual-reference experiment (4/7 reads),
+these no-error-hint trials show no spontaneous retrieval. Those were different
+tasks/seeds and development studies; this is not a matched causal effect estimate
+of adding a hint to an error. This study intentionally did **not** put hints there.
+
+## Reproducibility
+
+| Artifact | Revision | Local directory |
+|---|---|---|
+| Initial 56 live trials | `22ae2b3` | `benchmark-results/error-ladder-sol-20261116` |
+| Corrected 28 operation trials | `d09310d` | `benchmark-results/error-ladder-sol-corrected-20261116` |
+| Separate 84-trial schedule/tool audit | `7e6421d` | `benchmark-results/error-ladder-audit-20261116` |
+| Eight isolated transport checks, no inference | `22ae2b3` working build | `benchmark-results/error-ladder-transport-20261116` |
+
+Both live batches recorded clean working trees at launch. Source SHA-256 values:
+
+- Initial: `255a9f0e91474b94934978fccc711b75af6b0b9b5959aff69b406b06faca8b11`.
+- Corrected: `f25bdbc268b50acbad752b5d22ca8e210b17c98c053ef98eb4a5d768ad0c4139`.
+- Catalog, both runs: `5f2ccb768507b99090421700194b933d1fc3ad8d5b10b9d4cccd036c52af3e19`.
+
+Raw trial artifacts and source snapshots are gitignored. The audit can be reproduced
+without model inference or rewriting original results:
+
+```sh
+PYTHONPATH=bench .venv-bench/bin/python bench/audit_error_ladder.py \
+  --runs benchmark-results/error-ladder-sol-20261116 \
+         benchmark-results/error-ladder-sol-corrected-20261116 \
+  --output benchmark-results/NEW-error-ladder-audit
+```
+
+Validation: **96 benchmark tests**, **19 shim tests**, and eight isolated gate/help
+transport checks. No actual Azure/Kubernetes resource operations were performed.

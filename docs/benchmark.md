@@ -9,6 +9,10 @@ tool-surface exposure measurements without a prompt-hint mode.
 The [consecutive-error study](error-fallback-study.md) adds `error-ladder` to test
 whether failures trigger spontaneous help/skill retrieval. It uses help-only
 discovery and never offers skill references in injected errors.
+The recorded study has 84 live trials (75 audited valid), zero skill requests,
+and no observed error-count threshold for retrieval. Rejected calls and simulator
+coverage gaps are reported separately; repeated errors do not establish that
+skills are needed or can repair unavailable services.
 
 See [the initial GPT-6.1 Sol pilot](benchmark-pilot.md) for measured results from
 14 live, isolated trials.

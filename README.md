@@ -167,6 +167,10 @@ The [consecutive-error fallback study](docs/error-fallback-study.md) researches
 where skills add value and adds `aks_bench error-ladder`: matched trials with
 variable numbers of ARM-style or CLI failures, no skill hints in errors, and
 separate retry/help/skill-seek/read measurements.
+It records **84 live trials**, of which 75 passed the coverage/schedule audit.
+There were **zero skill requests or reads**, including after eight consecutive
+failures in valid trials. One valid skill-enabled session opened AKS help after
+two CLI errors and ignored the skill entry; no retrieval threshold was observed.
 
 The current default is the [investigation discovery suite](docs/investigation-discovery.md):
 seven symptom-first intermittent-networking and GPU/KAITO cases. `aks_bench discover`
