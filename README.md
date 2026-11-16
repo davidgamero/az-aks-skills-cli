@@ -163,6 +163,11 @@ tasks, with **zero skill reads**—no demonstrated skill-content benefit.
 
 ## Task-focused skill design
 
+The [consecutive-error fallback study](docs/error-fallback-study.md) researches
+where skills add value and adds `aks_bench error-ladder`: matched trials with
+variable numbers of ARM-style or CLI failures, no skill hints in errors, and
+separate retry/help/skill-seek/read measurements.
+
 The current default is the [investigation discovery suite](docs/investigation-discovery.md):
 seven symptom-first intermittent-networking and GPU/KAITO cases. `aks_bench discover`
 compares baseline, AKS-help discovery and contextual diagnostic references using

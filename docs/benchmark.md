@@ -6,6 +6,10 @@ help-only discovery and contextual diagnostic references. Earlier repair scenari
 remain available by name. This extension retains identical task prompts and adds
 tool-surface exposure measurements without a prompt-hint mode.
 
+The [consecutive-error study](error-fallback-study.md) adds `error-ladder` to test
+whether failures trigger spontaneous help/skill retrieval. It uses help-only
+discovery and never offers skill references in injected errors.
+
 See [the initial GPT-6.1 Sol pilot](benchmark-pilot.md) for measured results from
 14 live, isolated trials.
 The [help-change rerun](benchmark-help-evaluation.md) records 14 further trials

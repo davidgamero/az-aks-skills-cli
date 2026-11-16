@@ -228,7 +228,8 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
     sim = Simulator(scenario, skills=skills, log_path=directory / "az-events.jsonl", latency_scale=args.latency_scale,
-                    docs_mode=getattr(args, "docs_mode", "off"), skills_dir=getattr(args, "skills_dir", None), hint_policy=getattr(args,"hint_policy","help"))
+                    docs_mode=getattr(args, "docs_mode", "off"), skills_dir=getattr(args, "skills_dir", None), hint_policy=getattr(args,"hint_policy","help"),
+                    failure_config=getattr(args,"failure_config",None))
     prompt = scenario["prompt"]
     json_file(directory / "scenario.json", scenario)
     (directory / "prompt.txt").write_text(prompt + "\n")
@@ -325,6 +326,9 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
               "failed_tool_calls": sum(e["exit_code"] != 0 for e in sim.events),
               **native_web_usage(directory / "copilot.stdout.jsonl"),
               **telemetry(artifacts / "otel.jsonl")}
+    if getattr(args,"failure_config",None):
+        from .error_ladder import metrics as failure_metrics
+        result["failure_experiment"] = failure_metrics(sim.events,args.failure_config)
     if result["native_docs_transport_failures"]:
         result["valid_trial"] = False
         result["harness_error"] = "native Microsoft Learn lookup failed at the container transport boundary"
@@ -339,6 +343,9 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
 
 def report(directory):
     results = [json.loads(p.read_text()) for p in sorted(Path(directory).glob("*/result.json"))]
+    if any("failure_experiment" in r for r in results):
+        from .error_ladder import report as failure_report
+        return failure_report(directory,results)
     if any(r.get("condition") in ("help","contextual") for r in results):
         from .investigation_report import report as investigation_report
         return investigation_report(directory,results)
@@ -401,7 +408,7 @@ def report(directory):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Stateful, isolated AKS skill benchmark")
-    parser.add_argument("action", choices=("run", "compare", "discover", "replay", "check", "report", "coverage"))
+    parser.add_argument("action", choices=("run", "compare", "discover", "error-ladder", "replay", "check", "report", "coverage"))
     parser.add_argument("--output", type=Path, default=Path("benchmark-results") / time.strftime("%Y%m%d-%H%M%S"))
     parser.add_argument("--model", default="gpt-6.1-sol")
     parser.add_argument("--provider", choices=("copilot", "foundry"), default="copilot")
@@ -409,7 +416,7 @@ def main(argv=None):
     parser.add_argument("--engine", choices=("bwrap", "docker"), default="bwrap")
     parser.add_argument("--bwrap", default=shutil.which("bwrap") or "bwrap")
     parser.add_argument("--copilot", default=shutil.which("copilot") or "copilot")
-    parser.add_argument("--scenarios", nargs="+", choices=NAMES, default=list(investigations.NAMES))
+    parser.add_argument("--scenarios", nargs="+", choices=NAMES)
     parser.add_argument("--repeats", type=int, default=1)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=180)
@@ -420,8 +427,12 @@ def main(argv=None):
     parser.add_argument("--skills-dir", type=Path, default=ROOT / "skills", help="Skill catalog to snapshot for this run")
     parser.add_argument("--reference-skills-dir", type=Path, help="Original catalog for the baseline/original/revised compare action")
     parser.add_argument("--docs-mode", choices=("live", "off"), default="live",
-                        help="Allow logged GET-only Microsoft Learn access through the container curl tool")
+                         help="Allow logged GET-only Microsoft Learn access through the container curl tool")
+    parser.add_argument("--failure-counts",nargs="+",type=int,default=[0,1,2,3,5,8,-1],help="error-ladder: fail first N eligible Azure CLI calls; -1 is persistent")
+    parser.add_argument("--failure-kinds",nargs="+",choices=("arm503","cli_error"),default=["arm503","cli_error"])
     args = parser.parse_args(argv)
+    if args.scenarios is None:
+        args.scenarios=["manual-scale","egress-incident-snat"] if args.action=="error-ladder" else list(investigations.NAMES)
     if args.repeats < 1 or args.timeout <= 0 or args.latency_scale < 0:
         parser.error("repeats/timeout must be positive and latency-scale nonnegative")
     if args.fixture and len(args.scenarios) != 1:
@@ -430,6 +441,8 @@ def main(argv=None):
         parser.error("compare requires --reference-skills-dir")
     if args.action=="discover" and any(n not in investigations.NAMES for n in args.scenarios):
         parser.error("discover requires investigation scenarios")
+    if args.action=="error-ladder" and (any(v < -1 for v in args.failure_counts) or len(set(args.failure_counts))!=len(args.failure_counts)):
+        parser.error("failure counts must be distinct integers >= -1")
     if args.action == "coverage":
         print(json.dumps({"recognized": len(COMMANDS), "semantic": sorted(SEMANTIC),
                           "fixture_required": sorted(set(COMMANDS) - SEMANTIC)}, indent=2))
@@ -451,7 +464,8 @@ def main(argv=None):
                 "latency_scale": args.latency_scale, "docs_mode": args.docs_mode, "created_at": time.time(),
                 "command_manifest_sha256": hashlib.sha256((ROOT / "commands.json").read_bytes()).hexdigest()}
     metadata.update(action=args.action, catalog_sha256=selected_hash, reference_catalog_sha256=reference_hash,
-                    scenarios=args.scenarios)
+                     scenarios=args.scenarios)
+    if args.action=="error-ladder":metadata.update(failure_counts=args.failure_counts,failure_kinds=args.failure_kinds,failure_scope="shared Azure invocation prefix",hint_policy="help")
     metadata["source_sha256"] = hashlib.sha256(b"".join(
         str(p.relative_to(ROOT)).encode() + p.read_bytes()
         for p in sorted(ROOT.rglob("*")) if p.is_file() and p.suffix in (".py", ".json", ".md")
@@ -476,6 +490,9 @@ def main(argv=None):
     mode = "replay" if args.action == "replay" else "live"
     invalid = False
     rng = random.Random(args.seed)
+    if args.action=="error-ladder":
+        from .error_ladder import run_matrix
+        return run_matrix(args,rng,selected_dir,trial,report)
     for repeat in range(args.repeats):
         for scenario in args.scenarios:
             arms = [("baseline", False, selected_dir), ("skills", True, selected_dir)]

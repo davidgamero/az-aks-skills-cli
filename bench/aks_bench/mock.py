@@ -117,7 +117,7 @@ def render(value, options):
 
 
 class Simulator:
-    def __init__(self, scenario, skills=False, log_path=None, latency_scale=1.0, docs_mode="off", skills_dir=None, hint_policy="help"):
+    def __init__(self, scenario, skills=False, log_path=None, latency_scale=1.0, docs_mode="off", skills_dir=None, hint_policy="help", failure_config=None):
         self.scenario = copy.deepcopy(scenario)
         self.state = copy.deepcopy(scenario["state"])
         self.skills = skills
@@ -133,6 +133,11 @@ class Simulator:
         self.docs_mode = docs_mode
         self.hint_policy = hint_policy
         self.hint_surfaces = set()
+        from .error_ladder import FailureGate
+        self.failure_gate = FailureGate(**failure_config) if failure_config else None
+        if self.failure_gate and hint_policy != "help": raise ValueError("error ladder forbids contextual hints")
+        self.failure_lock = threading.Lock()
+        self.active_fault = None
 
     def state_hash(self):
         clusters = copy.deepcopy(self.state["clusters"])
@@ -152,6 +157,45 @@ class Simulator:
         self.state["pending"] = remaining
 
     def call(self, argv, tool="az", files=None, stdin=None):
+        if self.failure_gate is None:
+            return self.dispatch_call(argv, tool, files, stdin)
+        # Serialize eligibility and dispatch together. A parallel command batch cannot
+        # race the budget or reorder a recovery read ahead of its failures.
+        with self.failure_lock:
+            fault = self.failure_gate.next(tool, argv)
+            if not fault or not fault["injected"]:
+                self.active_fault = fault
+                try: return self.dispatch_call(argv, tool, files, stdin)
+                finally: self.active_fault = None
+            start = time.monotonic()
+            response = self.failure_gate.response()
+            from .candidate_runtime import parse as parse_words, WorldError
+            try: words, _, _ = parse_words([a for a in argv if a not in ("--debug","--verbose")], tool)
+            except (ValueError,WorldError): words = argv
+            end = time.monotonic()
+            arm = self.failure_gate.kind == "arm503"
+            digest = self.state_hash()
+            event = {"sequence":len(self.events)+1,"started_at":time.time(),"start_s":start-self.started,
+                "end_s":end-self.started,"duration_ms":(end-start)*1000,"argv":argv,"tool":tool,"command":" ".join(words),
+                "category":"azure" if arm else "local_failure","exit_code":response["exit_code"],
+                "error_code":"ServiceUnavailable" if arm else "CLIUnexpectedError","http_status":503 if arm else None,
+                "modeled_api_requests":1 if arm else 0,"modeled_kubernetes_requests":0,
+                "state_before":digest,"state_after":digest,"goal_satisfied":grade(self.scenario,self.state)["success"],
+                "stdout_bytes":0,"failure_gate":fault}
+            self.record_event(event)
+            if self.scenario.get("suite")=="investigation-v1":
+                self.state.setdefault("_incident_observations",[]).append({"tool":tool,"argv":argv,**response,"signals":{}})
+            return response
+
+    def record_event(self, event):
+        if self.active_fault: event["failure_gate"] = self.active_fault
+        if self.skills and event.get("tool", "az")=="az" and event["argv"][:1]==["aks"] and any(a in ("--help","-h") for a in event["argv"]) and event["exit_code"]==0:
+            event["skill_help_exposed"] = True
+        self.events.append(event)
+        if self.log_path:
+            with self.log_path.open("a") as stream: stream.write(json.dumps(event)+"\n")
+
+    def dispatch_call(self, argv, tool="az", files=None, stdin=None):
         if self.scenario.get("suite") == "investigation-v1":
             return self.investigation_call(argv, tool)
         if self.scenario.get("suite") == "candidate-v1":
@@ -293,10 +337,7 @@ class Simulator:
             event.update(end_s=end - self.started, duration_ms=(end - start) * 1000,
                          exit_code=response["exit_code"], state_before=before, state_after=self.state_hash(),
                          goal_satisfied=goal, stdout_bytes=len(response["stdout"].encode()))
-            self.events.append(event)
-            if self.log_path:
-                with self.log_path.open("a") as stream:
-                    stream.write(json.dumps(event) + "\n")
+            self.record_event(event)
             return response
 
     def investigation_call(self, argv, tool):
@@ -355,9 +396,7 @@ class Simulator:
             end=time.monotonic()
             event.update(end_s=end-self.started,duration_ms=(end-start)*1000,exit_code=response["exit_code"],state_before=before,state_after=self.state_hash(),
                          goal_satisfied=False,stdout_bytes=len(response["stdout"].encode()))
-            self.events.append(event)
-            if self.log_path:
-                with self.log_path.open("a") as stream: stream.write(json.dumps(event)+"\n")
+            self.record_event(event)
             return response
 
     def candidate_call(self, argv, tool, files, stdin):
@@ -421,9 +460,7 @@ class Simulator:
                          state_before=before, state_after=self.state_hash(), goal_satisfied=goal, stdout_bytes=len(response["stdout"].encode()))
             if files: event["uploaded_files"] = {name: hashlib.sha256(body.encode()).hexdigest() for name,body in files.items()}
             if stdin is not None: event["stdin_sha256"] = hashlib.sha256(stdin.encode()).hexdigest()
-            self.events.append(event)
-            if self.log_path:
-                with self.log_path.open("a") as stream: stream.write(json.dumps(event)+"\n")
+            self.record_event(event)
             return response
 
     def external_call(self, tool, argv):
@@ -475,10 +512,7 @@ class Simulator:
             event.update(end_s=end - self.started, duration_ms=(end - start) * 1000,
                          exit_code=response["exit_code"], state_after=self.state_hash(), goal_satisfied=goal,
                          stdout_bytes=len(response["stdout"].encode()))
-            self.events.append(event)
-            if self.log_path:
-                with self.log_path.open("a") as stream:
-                    stream.write(json.dumps(event) + "\n")
+            self.record_event(event)
             return response
 
     def help(self, command):
