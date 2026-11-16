@@ -169,9 +169,7 @@ class Simulator:
                 finally: self.active_fault = None
             start = time.monotonic()
             response = self.failure_gate.response()
-            from .candidate_runtime import parse as parse_words, WorldError
-            try: words, _, _ = parse_words([a for a in argv if a not in ("--debug","--verbose")], tool)
-            except (ValueError,WorldError): words = argv
+            words = self.failure_gate.command_words(argv)
             end = time.monotonic()
             arm = self.failure_gate.kind == "arm503"
             digest = self.state_hash()

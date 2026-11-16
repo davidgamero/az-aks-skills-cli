@@ -25,9 +25,7 @@ class FailureGate:
     def eligible(self, tool, argv):
         if tool != "az" or not argv or any(a in ("--help", "-h", "--version") for a in argv):
             return False
-        from .candidate_runtime import parse, WorldError
-        try: words, _, _ = parse([a for a in argv if a not in ("--debug","--verbose")], "az")
-        except (ValueError, WorldError): return False
+        words = self.command_words(argv)
         if not words or words[0] in ("account", "version", "configure", "extension"):
             return False
         if words[:2] in (["aks", "skill"], ["aks", "skills"]):
@@ -38,6 +36,28 @@ class FailureGate:
             return False
         roots = {"aks", "monitor", "network", "vm", "vmss", "provider", "group", "deployment", "resource", "identity", "role", "acr", "keyvault", "rest"}
         return words[0] in roots and (len(words) > 1 or words[0] == "rest")
+
+    @staticmethod
+    def command_words(argv):
+        """Classify the command prefix, independently of option-value parsing.
+
+        Boolean write flags must never make an Azure call escape injection just
+        because a different simulator parser expects a value for that flag.
+        """
+        words = []
+        index = 0
+        while index < len(argv):
+            arg = argv[index]
+            if arg.startswith("-"):
+                if words: break
+                if arg in ("--subscription", "--output", "-o", "--query"):
+                    index += 2
+                else:
+                    index += 1
+                continue
+            words.append(arg)
+            index += 1
+        return words
 
     def next(self, tool, argv):
         if not self.eligible(tool, argv): return None

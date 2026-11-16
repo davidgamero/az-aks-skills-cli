@@ -68,6 +68,17 @@ class ErrorLadderTests(unittest.TestCase):
             self.assertEqual(sim.events[-1]["modeled_api_requests"],count)
             self.assertEqual(sim.events[-1]["http_status"],503 if kind=="arm503" else None)
 
+    def test_boolean_mutation_flags_cannot_escape_injection(self):
+        for kind in ("arm503","cli_error"):
+            sim=self.sim(kind,count=-1)
+            before=sim.state_hash();c=sim.scenario["state"]["clusters"][0]
+            for flag in ("--disable-cluster-autoscaler","--enable-cluster-autoscaler","--update-cluster-autoscaler"):
+                args=["aks","nodepool","update","-g",c["resourceGroup"],"--cluster-name",c["name"],"-n","apps",flag]
+                self.assertEqual(sim.call(args)["exit_code"],1)
+                self.assertTrue(sim.events[-1]["failure_gate"]["injected"])
+                self.assertEqual(before,sim.state_hash())
+            self.assertEqual(sim.failure_gate.attempts,3)
+
     def test_persistent_failures_survive_help_reads_and_never_advance_resource(self):
         sim=self.sim(count=-1)
         before=sim.state_hash()
