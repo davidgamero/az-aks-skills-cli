@@ -121,3 +121,29 @@ class ErrorLadderTests(unittest.TestCase):
             self.assertEqual(summary["help"]["errors_before_reads"],[])
             self.assertEqual(summary["recovery_eligible_attempt"],4)
             self.assertEqual(summary["help"]["skill_read_trials"],0)
+
+    def test_schedule_audit_catches_boolean_flag_bypass_without_rescoring(self):
+        import sys
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+        from audit_error_ladder import audit_schedule
+        sim=self.sim(count=-1)
+        sim.call(self.show(sim))
+        self.assertEqual(audit_schedule(sim.events,{"kind":"arm503","failures":-1}),[])
+        escaped={**sim.events[0],"sequence":2,"argv":["aks","nodepool","update","--disable-cluster-autoscaler"],"exit_code":0}
+        escaped.pop("failure_gate")
+        result=audit_schedule([*sim.events,escaped],{"kind":"arm503","failures":-1})
+        self.assertEqual(result[0]["sequence"],2)
+
+    def test_tool_audit_does_not_treat_help_exposure_as_search(self):
+        import sys
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+        from audit_error_ladder import visible_tool_audit
+        events=[{"type":"tool.execution_start","data":{"toolName":"bash","arguments":{"command":"az aks nodepool --help"}}},
+                {"type":"tool.execution_complete","data":{"toolCallId":"help","result":{"content":"Related Commands\n    az aks skill : Find and print AKS skills and troubleshooting instructions."}}},
+                {"type":"assistant.reasoning","data":{"content":"not inspected"}},
+                {"type":"tool.execution_start","data":{"toolName":"bash","arguments":{"command":"find /home/agent -name SKILL.md"}}}]
+        with tempfile.TemporaryDirectory() as d:
+            path=Path(d)/"events.jsonl";path.write_text("\n".join(json.dumps(e) for e in events))
+            result=visible_tool_audit(path)
+            self.assertEqual(len(result["completed_results_advertising_skills"]),1)
+            self.assertEqual(len(result["skill_related_tool_requests"]),1)
