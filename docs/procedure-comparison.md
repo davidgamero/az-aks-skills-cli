@@ -140,3 +140,17 @@ restriction rather than penalizing an extra truthful field. The initial run is n
 silently rescored: a full new frozen 24-trial wave follows. The initial contextual
 condition read skills in six of eight trials; help-only read none. This is retrieval
 evidence from invalid performance trials, not a content-value estimate.
+
+The second 24-trial wave at `7e6e14f` is retained under
+`benchmark-results/procedure-comparison-v2-20261117`. Nineteen trials had complete
+coverage; five used two further unimplemented read-only inventories (managed public
+IPs or VM scale sets). All contextual trials read the relevant skill. All arms
+correctly assessed volume eligibility, but baseline/help agents reported a
+40-hour cross-region bound by adding the four-hour tiering delay to 24+12 hours,
+whereas contextual agents reported the support matrix's stated 36-hour bound.
+That distinction must be described as **agreement with a pinned source**, not a
+claim that every possible end-to-end backup latency is proven to be 36 hours.
+
+Those missing inventory reads are added for a fresh targeted SNAT/detached-disk
+rerun. Invalid results remain excluded; the valid backup failures and DNS/disk
+comparisons are retained rather than rerun until they pass.

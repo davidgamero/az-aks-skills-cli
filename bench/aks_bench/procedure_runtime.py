@@ -72,6 +72,13 @@ class ProcedureWorld(World):
             rule={"name":"aksOutboundRule","allocatedOutboundPorts":p["allocatedOutboundPorts"],"idleTimeoutInMinutes":p["idleTimeoutInMinutes"],"frontendIPConfigurations":[{"id":"/synthetic/outbound/"+str(i)} for i in range(p["managedOutboundIPs"]["count"])]}
             lb={"name":"kubernetes","resourceGroup":self.cluster["nodeResourceGroup"],"id":"/synthetic/loadBalancers/kubernetes","sku":{"name":"Standard"},"outboundRules":[rule]}
             return ([lb] if command=="network lb list" else [rule] if command.endswith("list") else lb),["lb_effective"]
+        if command=="network public-ip list" and self.name=="procedure-snat-surge-budget":
+            count=self.cluster["networkProfile"]["loadBalancerProfile"]["managedOutboundIPs"]["count"]
+            return [{"name":f"egress-{i}","id":f"/synthetic/publicIPAddresses/egress-{i}","resourceGroup":self.cluster["nodeResourceGroup"],
+                "ipAddress":f"198.51.100.{51+i}","sku":{"name":"Standard"},"publicIPAllocationMethod":"Static"} for i in range(count)],[]
+        if command=="vmss list" and self.name=="procedure-disk-expand-boundary":
+            return [{"name":f"aks-{pool['name']}-vmss","id":f"/synthetic/virtualMachineScaleSets/aks-{pool['name']}-vmss",
+                "sku":{"name":pool["vmSize"],"capacity":pool["count"]}} for pool in self.cluster["agentPoolProfiles"]],[]
         if command=="disk show" and "disk" in self.w:return {k:v for k,v in self.w["disk"].items() if k!="dataHash"},[]
         if command=="role assignment list":return [r for r in self.w["roles"] if not o.get("--scope") or r["scope"]==o["--scope"]],[]
         if self.name=="procedure-backup-region-eligibility":

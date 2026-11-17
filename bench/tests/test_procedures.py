@@ -118,3 +118,12 @@ class ProcedureTests(unittest.TestCase):
             row["blockers"]=blockers;self.assertTrue(grade(sim.scenario,sim.state)["success"])
         row["blockers"]=["driver","sizeGiB"]
         self.assertFalse(grade(sim.scenario,sim.state)["success"])
+
+    def test_owner_inventory_reads_have_realistic_bounded_coverage(self):
+        sim=self.sim(NAMES[0]);self.solve(sim)
+        result=sim.call(["network","public-ip","list","-g",sim.state["clusters"][0]["nodeResourceGroup"]])
+        count=sim.state["clusters"][0]["networkProfile"]["loadBalancerProfile"]["managedOutboundIPs"]["count"]
+        self.assertEqual(len(json.loads(result["stdout"])),count)
+        sim=self.sim(NAMES[2]);result=sim.call(["vmss","list","-g",sim.state["clusters"][0]["nodeResourceGroup"]])
+        self.assertEqual(result["exit_code"],0)
+        self.assertEqual(len(json.loads(result["stdout"])),2)
