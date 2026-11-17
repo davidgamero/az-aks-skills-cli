@@ -11,12 +11,12 @@ New guide-derived cases are documented in [procedure comparison](procedure-compa
 |---|---|---|---|
 | `procedure-application-consistent-snapshot` | backup | design_only | Quiesce writes using the application's supported protocol, snapshot the correct volume, restore a new consumer and validate application/data consistency rather than snapshot metadata alone. |
 | `procedure-autoscaler-scale-down-proof` | autoscaling | design_only | Use requests/allocatable rather than CPU usage alone; inspect move feasibility, PDB/safe-to-evict/local storage and timers; distinguish scale-up cap from scale-down eligibility. |
-| `procedure-backup-region-eligibility` | backup | not_live_evaluated | Join PV driver/class and disk size/access/DES fields; separate Operational/Vault tier, paired-region restore and secondary RPO. |
+| `procedure-backup-region-eligibility` | backup | live_smoke_evaluated | Join PV driver/class and disk size/access/DES fields; separate Operational/Vault tier, paired-region restore and secondary RPO. |
 | `procedure-backup-restore-role-chain` | backup | design_only | Separate extension identity, vault identity, trusted access, target/snapshot/staging scopes and restore-tier roles; validate before starting and preserve security constraints. |
 | `procedure-cni-dynamic-batches` | network-capacity | design_only | Separate node/pod subnets; account for per-node 16-address allocations, refill below eight free, surge and churn before comparing NNC allocations to apparent demand. |
-| `procedure-coredns-import-reload` | dns | not_live_evaluated | Use coredns-custom import suffixes, preserve main/legacy config, reload and verify affected plus preserved query paths. |
+| `procedure-coredns-import-reload` | dns | live_smoke_evaluated | Use coredns-custom import suffixes, preserve main/legacy config, reload and verify affected plus preserved query paths. |
 | `procedure-csi-retain-migration` | storage | design_only | Set Retain before logical object removal; preserve physical disk handle, prebind replacement CSI PV/PVC and verify data/consumer continuity. |
-| `procedure-disk-expand-boundary` | storage | not_live_evaluated | Branch on actual disk SKU, detach when required, grow existing claim, restore consumer and verify mounted filesystem/data without recreation. |
+| `procedure-disk-expand-boundary` | storage | live_smoke_evaluated | Branch on actual disk SKU, detach when required, grow existing claim, restore consumer and verify mounted filesystem/data without recreation. |
 | `procedure-disk-zone-safe-recovery` | storage | design_only | Compare actual disk zone and eligible capacity; preserve truthful topology and data, choose a same-zone pool or approved storage migration instead of falsifying labels/affinity. |
 | `procedure-files-key-stale-mount` | storage | design_only | Classify DNS/TCP445 versus SMB auth/cipher failure, verify key version without disclosing it and resolve stale mount/consumer lifecycle through an approved remount path. |
 | `procedure-gitops-durable-repair` | gitops | design_only | Trace field ownership to Flux source/path, modify the approved repository overlay, reconcile and verify revision; restore any authorized temporary suspension and avoid prune-driven data loss. |
@@ -30,9 +30,23 @@ New guide-derived cases are documented in [procedure comparison](procedure-compa
 | `procedure-priority-expander-match` | autoscaling | design_only | Verify exact group-name regex coverage, priority ordering and fallback eligibility using current pool identities rather than copying ambiguous sample priorities. |
 | `procedure-reclaim-released-volume` | storage | design_only | Verify Retain and disk/data identity, resolve the old claim reservation, explicitly bind the new claim and verify content without deleting the physical asset. |
 | `procedure-service-ip-expand` | network-capacity | design_only | Gate on supported version/allocator and address plan; add ServiceCIDR, preserve existing IPAddress ownership and verify new allocation; distinguish extension from moving the original service range. |
-| `procedure-snat-surge-budget` | egress | not_live_evaluated | Round per-node ports to eight, include all pool maxima and approved concurrent surge, size 64000-port frontends and update the AKS owner rather than its reconciled LB. |
+| `procedure-snat-surge-budget` | egress | live_smoke_evaluated | Round per-node ports to eight, include all pool maxima and approved concurrent surge, size 64000-port frontends and update the AKS owner rather than its reconciled LB. |
 | `procedure-upgrade-subnet-preflight` | upgrade | design_only | Inventory every pool/subnet, distinguish CNI modes, use applicable maxima and surge, account for reserved/other addresses, and select an authorized feasible upgrade envelope. |
 | `procedure-webhook-scoped-recovery` | admission | design_only | Read matched webhook rules, service endpoints, TLS and tunnel evidence, then restore the failing relationship or use an explicitly approved narrow exception with rollback. |
+
+## Explicit new live comparisons
+
+B/H/C = baseline / help-only / contextual. Medians use successful valid trials only; failures/invalids remain in JSON. Small development/replication samples are descriptive, not statistical significance. Use paired deltas in JSON rather than subtracting medians from different valid-seed sets.
+
+| Scenario | Rubric pass/valid B/H/C | Reads H/C | Seconds B/H/C | CLI calls B/H/C | Model spans B/H/C |
+|---|---|---|---|---|---|
+| `procedure-backup-region-eligibility` | 0/2 / 0/2 / 2/2 | 0/2 | — / — / 51.6 | — / — / 17.0 | — / — / 8.5 |
+| `procedure-coredns-import-reload` | 2/2 / 2/2 / 2/2 | 0/2 | 36.6 / 35.5 / 38.6 | 27.5 / 25.5 / 31.5 | 7.5 / 7.5 / 8.5 |
+| `procedure-disk-expand-boundary` | 3/3 / 4/4 / 4/4 | 0/4 | 42.9 / 35.1 / 32.9 | 30.0 / 28.0 / 28.0 | 11.0 / 9.0 / 8.5 |
+| `procedure-snat-surge-budget` | 2/2 / 1/1 / 2/2 | 0/2 | 37.9 / 44.4 / 29.1 | 13.0 / 13.0 / 14.0 | 8.0 / 9.0 / 6.5 |
+
+Backup's full rubric includes agreement with the pinned support matrix's stated RPO. All arms may classify volumes correctly while differing on that bound; consult the criterion counts and the comparison report before treating full-rubric passes as a general correctness improvement.
+Multiple run directories are selected in the explicit order supplied, replacing complete scenario/seed groups including failures/invalids. Historical development runs are not silently pooled.
 
 ## Existing controls and historical scenarios
 

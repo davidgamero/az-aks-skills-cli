@@ -169,6 +169,12 @@ The [first procedure-comparison wave](docs/procedure-comparison.md) tests four o
 those in baseline/help-only/contextual conditions and records time, CLI calls,
 model calls and actual retrieval. Its four procedures bring the benchmark catalog
 to 31 skills; older reports keep their original catalog counts.
+The new study retains **66 live trials**. Three valid matched disk-expansion pairs
+show a descriptive **−5.86 s median paired time**, one fewer model span and fewer
+documentation fetches with contextual skill retrieval, but no median reduction in
+CLI invocations. Replication included a flat result and invalid command-coverage
+cases, so this is a candidate efficiency signal—not a proven general win. CoreDNS
+showed overhead; backup's narrow difference was agreement with a pinned RPO source.
 
 The [consecutive-error fallback study](docs/error-fallback-study.md) researches
 where skills add value and adds `aks_bench error-ladder`: matched trials with

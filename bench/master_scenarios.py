@@ -4,6 +4,7 @@ import argparse
 import json
 from pathlib import Path
 import statistics
+from collections import Counter
 
 from aks_bench.scenarios import NAMES
 from aks_bench.procedures import NAMES as PROCEDURES
@@ -16,19 +17,21 @@ def metrics(rows):
     result={}
     for arm in ("baseline","help","contextual"):
         trials=[r for r in rows if r["condition"]==arm];valid=[r for r in trials if r["valid_trial"]];ok=[r for r in valid if r["success"]]
+        measured=("elapsed_s","tool_calls","llm_requests")+(("agent_tool_calls",) if ok and all("agent_tool_calls" in r for r in ok) else ())
         result[arm]={"trials":len(trials),"valid":len(valid),"successes":len(ok),"invalid":len(trials)-len(valid),
             "read_trials":sum(r["skill_reads"]>0 for r in valid),
             "criterion_successes":{k:sum(r["state_grade"]["checks"].get(k,False) for r in valid) for k in sorted({k for r in valid for k in r["state_grade"]["checks"]})},
             "documentation_attempts":sum(r.get("native_web_tool_attempts",0)+r.get("documentation_lookups",0) for r in valid),
-            "median_successful":{k:statistics.median(r[k] for r in ok) for k in ("elapsed_s","tool_calls","llm_requests")} if ok else {}}
+            "median_successful":{k:statistics.median(r[k] for r in ok) for k in measured} if ok else {}}
     for arm in ("help","contextual"):
         pairs=[]
         for seed in sorted({r["seed"] for r in rows}):
             by={r["condition"]:r for r in rows if r["seed"]==seed and r["valid_trial"] and r["success"]}
             if arm in by and "baseline" in by:
-                pairs.append({"seed":seed,**{k:by[arm][k]-by["baseline"][k] for k in ("elapsed_s","tool_calls","llm_requests")}})
+                names=("elapsed_s","tool_calls","llm_requests")+(("agent_tool_calls",) if all("agent_tool_calls" in by[c] for c in (arm,"baseline")) else ())
+                pairs.append({"seed":seed,**{k:by[arm][k]-by["baseline"][k] for k in names}})
         result[arm+"_minus_baseline"]={"successful_pairs":len(pairs),"deltas":pairs,
-            "median":{k:statistics.median(p[k] for p in pairs) for k in ("elapsed_s","tool_calls","llm_requests")} if pairs else {}}
+            "median":{k:statistics.median(p[k] for p in pairs if k in p) for k in ("elapsed_s","tool_calls","llm_requests","agent_tool_calls") if any(k in p for p in pairs)} if pairs else {}}
     return result
 
 
@@ -49,6 +52,15 @@ def build(run_paths=()):
         for result_path in path.glob("*/result.json"):
             row=json.loads(result_path.read_text())
             if row.get("mode")!="live":raise ValueError("replay/audit is not a new live trial")
+            output=result_path.parent/"copilot.stdout.jsonl"
+            if output.exists():
+                tools={}
+                for line in output.read_text().splitlines():
+                    try:event=json.loads(line)
+                    except ValueError:continue
+                    if event.get("type")=="tool.execution_start":
+                        payload=event.get("data",{});tools[payload.get("toolCallId",event.get("id"))]=payload.get("toolName","unknown")
+                row["agent_tool_calls"]=len(tools);row["agent_tool_counts"]=dict(Counter(tools.values()))
             local.setdefault((row["scenario"],row["seed"]),[]).append({**row,"source_run":str(path)})
         for key,rows in local.items():
             if len(rows)!=3 or {r["condition"] for r in rows}!={"baseline","help","contextual"}:raise ValueError("incomplete/duplicate three-arm group")
@@ -94,7 +106,7 @@ def main():
             lines.append(f"| `{entry['id']}` | {entry['topic']} | {entry['evaluation_status']} | {entry['missing_procedure']} |")
     measured=[e for e in data["scenarios"] if "comparison" in e]
     if measured:
-        lines += ["","## Explicit new live comparisons","","B/H/C = baseline / help-only / contextual. Medians use successful valid trials only; failures/invalids remain in JSON. One/two-seed smoke results are descriptive, not statistical significance.",
+        lines += ["","## Explicit new live comparisons","","B/H/C = baseline / help-only / contextual. Medians use successful valid trials only; failures/invalids remain in JSON. Small development/replication samples are descriptive, not statistical significance. Use paired deltas in JSON rather than subtracting medians from different valid-seed sets.",
             "","| Scenario | Rubric pass/valid B/H/C | Reads H/C | Seconds B/H/C | CLI calls B/H/C | Model spans B/H/C |","|---|---|---|---|---|---|"]
         for e in measured:
             c=e["comparison"];arms=("baseline","help","contextual")

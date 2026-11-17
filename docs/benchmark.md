@@ -5,6 +5,10 @@ The [master scenario registry](master-scenarios.md) contains 58 specific cases:
 adds SNAT surge sizing, persistent CoreDNS custom reload, disk-SKU expansion
 branching and volume-specific cross-region backup eligibility. Historical and
 new evaluations remain separately versioned.
+The procedure study retains 66 live trials including coverage corrections and a
+targeted replication. Selected comparisons preserve invalids and failures and
+report same-seed time/CLI/model/tool deltas; the disk procedure shows an exploratory
+lookup/time signal, not statistically established efficacy.
 
 The current default is the [symptom-first investigation/discovery suite](investigation-discovery.md):
 seven intermittent-egress and GPU/KAITO cases. Use `discover` to compare no skills,

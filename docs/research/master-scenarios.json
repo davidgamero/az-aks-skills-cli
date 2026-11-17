@@ -4,7 +4,44 @@
   "runnable_scenarios": 38,
   "designed_only": 20,
   "notes": "One registry, not one pooled statistical study. New comparison rows only summarize explicitly supplied live runs; historical trials remain separate. No positive content claim when skills were unread.",
-  "new_wave_runs": [],
+  "selection_rule": "Last explicitly supplied run replaces the complete scenario/seed group, never individual arms; invalids and failures retained.",
+  "new_wave_runs": [
+    {
+      "directory": "benchmark-results/procedure-comparison-20261117",
+      "revision": "45e3cca1c7ae6f776521d7eb5291c90dff026ed0",
+      "source_sha256": "77a3f79e22a5db535ea9191dca7bd43ace91d6dab282f7b88fae4aac5f794de5",
+      "catalog_sha256": "255a1f880e9fe7a40ac4e3addef3e119334e6cddda2ac6be1426a64840387fda",
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "directory": "benchmark-results/procedure-comparison-v2-20261117",
+      "revision": "7e6e14f69da80a13f32a87b65f634391ba9db269",
+      "source_sha256": "7ebaacc0147ac75d5a1d1802759cdb181424726adc3c2fa99990c87e101b21f8",
+      "catalog_sha256": "255a1f880e9fe7a40ac4e3addef3e119334e6cddda2ac6be1426a64840387fda",
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "directory": "benchmark-results/procedure-snat-v3-20261117",
+      "revision": "d1b8d16a5df91f857b3b2b414d64a8f1b857fdb2",
+      "source_sha256": "d1ff58744923bf897e98df8640ee036e0eaaa2960532f1d6c845edb753937b81",
+      "catalog_sha256": "255a1f880e9fe7a40ac4e3addef3e119334e6cddda2ac6be1426a64840387fda",
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "directory": "benchmark-results/procedure-disk-v3-20261117",
+      "revision": "d1b8d16a5df91f857b3b2b414d64a8f1b857fdb2",
+      "source_sha256": "d1ff58744923bf897e98df8640ee036e0eaaa2960532f1d6c845edb753937b81",
+      "catalog_sha256": "255a1f880e9fe7a40ac4e3addef3e119334e6cddda2ac6be1426a64840387fda",
+      "model": "gpt-6.1-sol"
+    },
+    {
+      "directory": "benchmark-results/procedure-disk-replication-20261117",
+      "revision": "7ed1243baefe134c704550bd04df6e27511644d5",
+      "source_sha256": "321e7a4ca274bd447b3ced9c23db5dabd7856c8bf803ab5325485f6d48b68b92",
+      "catalog_sha256": "255a1f880e9fe7a40ac4e3addef3e119334e6cddda2ac6be1426a64840387fda",
+      "model": "gpt-6.1-sol"
+    }
+  ],
   "scenarios": [
     {
       "id": "acr-abac-pull-repair",
@@ -539,7 +576,127 @@
         "https://learn.microsoft.com/en-us/azure/backup/tutorial-restore-aks-backups-across-regions"
       ],
       "runnable": true,
-      "evaluation_status": "not_live_evaluated"
+      "evaluation_status": "live_smoke_evaluated",
+      "comparison": {
+        "baseline": {
+          "trials": 2,
+          "valid": 2,
+          "successes": 0,
+          "invalid": 0,
+          "read_trials": 0,
+          "criterion_successes": {
+            "all_volumes_assessed": 2,
+            "eligibility_volume-81-0": 1,
+            "eligibility_volume-81-1": 1,
+            "eligibility_volume-81-2": 1,
+            "eligibility_volume-81-3": 1,
+            "eligibility_volume-81-4": 1,
+            "eligibility_volume-81-5": 1,
+            "eligibility_volume-81-6": 1,
+            "eligibility_volume-82-0": 1,
+            "eligibility_volume-82-1": 1,
+            "eligibility_volume-82-2": 1,
+            "eligibility_volume-82-3": 1,
+            "eligibility_volume-82-4": 1,
+            "eligibility_volume-82-5": 1,
+            "eligibility_volume-82-6": 1,
+            "no_forbidden_transition": 2,
+            "one_cluster": 2,
+            "paired_region_rpo": 0,
+            "read_only": 2,
+            "unrelated_cluster_settings_preserved": 2
+          },
+          "documentation_attempts": 9,
+          "median_successful": {}
+        },
+        "help": {
+          "trials": 2,
+          "valid": 2,
+          "successes": 0,
+          "invalid": 0,
+          "read_trials": 0,
+          "criterion_successes": {
+            "all_volumes_assessed": 2,
+            "eligibility_volume-81-0": 1,
+            "eligibility_volume-81-1": 1,
+            "eligibility_volume-81-2": 1,
+            "eligibility_volume-81-3": 1,
+            "eligibility_volume-81-4": 1,
+            "eligibility_volume-81-5": 1,
+            "eligibility_volume-81-6": 1,
+            "eligibility_volume-82-0": 1,
+            "eligibility_volume-82-1": 1,
+            "eligibility_volume-82-2": 1,
+            "eligibility_volume-82-3": 1,
+            "eligibility_volume-82-4": 1,
+            "eligibility_volume-82-5": 1,
+            "eligibility_volume-82-6": 1,
+            "no_forbidden_transition": 2,
+            "one_cluster": 2,
+            "paired_region_rpo": 0,
+            "read_only": 2,
+            "unrelated_cluster_settings_preserved": 2
+          },
+          "documentation_attempts": 8,
+          "median_successful": {}
+        },
+        "contextual": {
+          "trials": 2,
+          "valid": 2,
+          "successes": 2,
+          "invalid": 0,
+          "read_trials": 2,
+          "criterion_successes": {
+            "all_volumes_assessed": 2,
+            "eligibility_volume-81-0": 1,
+            "eligibility_volume-81-1": 1,
+            "eligibility_volume-81-2": 1,
+            "eligibility_volume-81-3": 1,
+            "eligibility_volume-81-4": 1,
+            "eligibility_volume-81-5": 1,
+            "eligibility_volume-81-6": 1,
+            "eligibility_volume-82-0": 1,
+            "eligibility_volume-82-1": 1,
+            "eligibility_volume-82-2": 1,
+            "eligibility_volume-82-3": 1,
+            "eligibility_volume-82-4": 1,
+            "eligibility_volume-82-5": 1,
+            "eligibility_volume-82-6": 1,
+            "no_forbidden_transition": 2,
+            "one_cluster": 2,
+            "paired_region_rpo": 2,
+            "read_only": 2,
+            "unrelated_cluster_settings_preserved": 2
+          },
+          "documentation_attempts": 5,
+          "median_successful": {
+            "elapsed_s": 51.60432849099743,
+            "tool_calls": 17.0,
+            "llm_requests": 8.5,
+            "agent_tool_calls": 11.0
+          }
+        },
+        "help_minus_baseline": {
+          "successful_pairs": 0,
+          "deltas": [],
+          "median": {}
+        },
+        "contextual_minus_baseline": {
+          "successful_pairs": 0,
+          "deltas": [],
+          "median": {}
+        }
+      },
+      "selected_groups": [
+        {
+          "seed": 81,
+          "source_run": "benchmark-results/procedure-comparison-v2-20261117"
+        },
+        {
+          "seed": 82,
+          "source_run": "benchmark-results/procedure-comparison-v2-20261117"
+        }
+      ]
     },
     {
       "id": "procedure-backup-restore-role-chain",
@@ -614,7 +771,135 @@
         "https://learn.microsoft.com/en-us/answers/questions/2337666/aks-coredns-override-reverting-automatically-dns-r"
       ],
       "runnable": true,
-      "evaluation_status": "not_live_evaluated"
+      "evaluation_status": "live_smoke_evaluated",
+      "comparison": {
+        "baseline": {
+          "trials": 2,
+          "valid": 2,
+          "successes": 2,
+          "invalid": 0,
+          "read_trials": 0,
+          "criterion_successes": {
+            "legacy_preserved": 2,
+            "loaded_private_zone": 2,
+            "managed_main_preserved": 2,
+            "no_forbidden_transition": 2,
+            "one_cluster": 2,
+            "unrelated_cluster_settings_preserved": 2
+          },
+          "documentation_attempts": 0,
+          "median_successful": {
+            "elapsed_s": 36.56638305199158,
+            "tool_calls": 27.5,
+            "llm_requests": 7.5,
+            "agent_tool_calls": 9.0
+          }
+        },
+        "help": {
+          "trials": 2,
+          "valid": 2,
+          "successes": 2,
+          "invalid": 0,
+          "read_trials": 0,
+          "criterion_successes": {
+            "legacy_preserved": 2,
+            "loaded_private_zone": 2,
+            "managed_main_preserved": 2,
+            "no_forbidden_transition": 2,
+            "one_cluster": 2,
+            "unrelated_cluster_settings_preserved": 2
+          },
+          "documentation_attempts": 0,
+          "median_successful": {
+            "elapsed_s": 35.468380524995155,
+            "tool_calls": 25.5,
+            "llm_requests": 7.5,
+            "agent_tool_calls": 9.5
+          }
+        },
+        "contextual": {
+          "trials": 2,
+          "valid": 2,
+          "successes": 2,
+          "invalid": 0,
+          "read_trials": 2,
+          "criterion_successes": {
+            "legacy_preserved": 2,
+            "loaded_private_zone": 2,
+            "managed_main_preserved": 2,
+            "no_forbidden_transition": 2,
+            "one_cluster": 2,
+            "unrelated_cluster_settings_preserved": 2
+          },
+          "documentation_attempts": 0,
+          "median_successful": {
+            "elapsed_s": 38.636251252988586,
+            "tool_calls": 31.5,
+            "llm_requests": 8.5,
+            "agent_tool_calls": 11.0
+          }
+        },
+        "help_minus_baseline": {
+          "successful_pairs": 2,
+          "deltas": [
+            {
+              "seed": 81,
+              "elapsed_s": 1.0412245040060952,
+              "tool_calls": -1,
+              "llm_requests": 1,
+              "agent_tool_calls": 3
+            },
+            {
+              "seed": 82,
+              "elapsed_s": -3.237229557998944,
+              "tool_calls": -3,
+              "llm_requests": -1,
+              "agent_tool_calls": -2
+            }
+          ],
+          "median": {
+            "elapsed_s": -1.0980025269964244,
+            "tool_calls": -2.0,
+            "llm_requests": 0.0,
+            "agent_tool_calls": 0.5
+          }
+        },
+        "contextual_minus_baseline": {
+          "successful_pairs": 2,
+          "deltas": [
+            {
+              "seed": 81,
+              "elapsed_s": 10.407828970986884,
+              "tool_calls": 5,
+              "llm_requests": 4,
+              "agent_tool_calls": 9
+            },
+            {
+              "seed": 82,
+              "elapsed_s": -6.26809256899287,
+              "tool_calls": 3,
+              "llm_requests": -2,
+              "agent_tool_calls": -5
+            }
+          ],
+          "median": {
+            "elapsed_s": 2.069868200997007,
+            "tool_calls": 4.0,
+            "llm_requests": 1.0,
+            "agent_tool_calls": 2.0
+          }
+        }
+      },
+      "selected_groups": [
+        {
+          "seed": 81,
+          "source_run": "benchmark-results/procedure-comparison-v2-20261117"
+        },
+        {
+          "seed": 82,
+          "source_run": "benchmark-results/procedure-comparison-v2-20261117"
+        }
+      ]
     },
     {
       "id": "procedure-csi-retain-migration",
@@ -656,17 +941,189 @@
       ],
       "negative_control": "Treat all disk types as online or take unnecessary downtime for Premium v2.",
       "holdouts": [
-        "Premium v1 versus v2",
         "below boundary",
         "multiple consumers",
-        "filesystem expansion pending"
+        "filesystem expansion pending",
+        "unknown disk SKU"
       ],
       "sources": [
         "https://learn.microsoft.com/en-us/azure/aks/create-volume-azure-disk",
         "https://learn.microsoft.com/en-us/answers/questions/5874095/aks-premium-ssd-zrs-confirming-dynamic-pvc-expansi"
       ],
       "runnable": true,
-      "evaluation_status": "not_live_evaluated"
+      "evaluation_status": "live_smoke_evaluated",
+      "comparison": {
+        "baseline": {
+          "trials": 5,
+          "valid": 3,
+          "successes": 3,
+          "invalid": 2,
+          "read_trials": 0,
+          "criterion_successes": {
+            "actual_data_preserved": 3,
+            "disk_preserved": 3,
+            "disk_sku_preserved": 3,
+            "filesystem_expanded": 3,
+            "no_forbidden_transition": 3,
+            "one_cluster": 3,
+            "pv_preserved": 3,
+            "pvc_preserved": 3,
+            "replicas_restored": 3,
+            "target_disk_size": 3,
+            "unnecessary_downtime_avoided": 3,
+            "unrelated_cluster_settings_preserved": 3
+          },
+          "documentation_attempts": 7,
+          "median_successful": {
+            "elapsed_s": 42.93855265202001,
+            "tool_calls": 30,
+            "llm_requests": 11,
+            "agent_tool_calls": 14
+          }
+        },
+        "help": {
+          "trials": 5,
+          "valid": 4,
+          "successes": 4,
+          "invalid": 1,
+          "read_trials": 0,
+          "criterion_successes": {
+            "actual_data_preserved": 4,
+            "disk_preserved": 4,
+            "disk_sku_preserved": 4,
+            "filesystem_expanded": 4,
+            "no_forbidden_transition": 4,
+            "one_cluster": 4,
+            "pv_preserved": 4,
+            "pvc_preserved": 4,
+            "replicas_restored": 4,
+            "target_disk_size": 4,
+            "unnecessary_downtime_avoided": 4,
+            "unrelated_cluster_settings_preserved": 4
+          },
+          "documentation_attempts": 5,
+          "median_successful": {
+            "elapsed_s": 35.09443224799179,
+            "tool_calls": 28.0,
+            "llm_requests": 9.0,
+            "agent_tool_calls": 12.5
+          }
+        },
+        "contextual": {
+          "trials": 5,
+          "valid": 4,
+          "successes": 4,
+          "invalid": 1,
+          "read_trials": 4,
+          "criterion_successes": {
+            "actual_data_preserved": 4,
+            "disk_preserved": 4,
+            "disk_sku_preserved": 4,
+            "filesystem_expanded": 4,
+            "no_forbidden_transition": 4,
+            "one_cluster": 4,
+            "pv_preserved": 4,
+            "pvc_preserved": 4,
+            "replicas_restored": 4,
+            "target_disk_size": 4,
+            "unnecessary_downtime_avoided": 4,
+            "unrelated_cluster_settings_preserved": 4
+          },
+          "documentation_attempts": 0,
+          "median_successful": {
+            "elapsed_s": 32.876218972494826,
+            "tool_calls": 28.0,
+            "llm_requests": 8.5,
+            "agent_tool_calls": 10.5
+          }
+        },
+        "help_minus_baseline": {
+          "successful_pairs": 3,
+          "deltas": [
+            {
+              "seed": 81,
+              "elapsed_s": -9.903176121006254,
+              "tool_calls": -2,
+              "llm_requests": -2,
+              "agent_tool_calls": -1
+            },
+            {
+              "seed": 82,
+              "elapsed_s": 0.17525211098836735,
+              "tool_calls": -5,
+              "llm_requests": 0,
+              "agent_tool_calls": 0
+            },
+            {
+              "seed": 85,
+              "elapsed_s": 1.5162980189779773,
+              "tool_calls": 1,
+              "llm_requests": 0,
+              "agent_tool_calls": -1
+            }
+          ],
+          "median": {
+            "elapsed_s": 0.17525211098836735,
+            "tool_calls": -2,
+            "llm_requests": 0,
+            "agent_tool_calls": -1
+          }
+        },
+        "contextual_minus_baseline": {
+          "successful_pairs": 3,
+          "deltas": [
+            {
+              "seed": 81,
+              "elapsed_s": -10.053904650005279,
+              "tool_calls": 0,
+              "llm_requests": -3,
+              "agent_tool_calls": -2
+            },
+            {
+              "seed": 82,
+              "elapsed_s": -5.861251147987787,
+              "tool_calls": -7,
+              "llm_requests": -1,
+              "agent_tool_calls": 1
+            },
+            {
+              "seed": 85,
+              "elapsed_s": 0.06988297798670828,
+              "tool_calls": 5,
+              "llm_requests": 0,
+              "agent_tool_calls": -1
+            }
+          ],
+          "median": {
+            "elapsed_s": -5.861251147987787,
+            "tool_calls": 0,
+            "llm_requests": -1,
+            "agent_tool_calls": -1
+          }
+        }
+      },
+      "selected_groups": [
+        {
+          "seed": 81,
+          "source_run": "benchmark-results/procedure-disk-v3-20261117"
+        },
+        {
+          "seed": 82,
+          "source_run": "benchmark-results/procedure-comparison-v2-20261117"
+        },
+        {
+          "seed": 83,
+          "source_run": "benchmark-results/procedure-disk-replication-20261117"
+        },
+        {
+          "seed": 84,
+          "source_run": "benchmark-results/procedure-disk-replication-20261117"
+        },
+        {
+          "seed": 85,
+          "source_run": "benchmark-results/procedure-disk-replication-20261117"
+        }
+      ]
     },
     {
       "id": "procedure-disk-zone-safe-recovery",
@@ -1002,7 +1459,128 @@
         "https://learn.microsoft.com/en-us/answers/questions/1294363/prevent-snat-port-exhaustion-in-aks-standard-load"
       ],
       "runnable": true,
-      "evaluation_status": "not_live_evaluated"
+      "evaluation_status": "live_smoke_evaluated",
+      "comparison": {
+        "baseline": {
+          "trials": 2,
+          "valid": 2,
+          "successes": 2,
+          "invalid": 0,
+          "read_trials": 0,
+          "criterion_successes": {
+            "ip_approval": 2,
+            "ips_minimal": 2,
+            "no_forbidden_transition": 2,
+            "one_cluster": 2,
+            "ports_minimal": 2,
+            "unrelated_cluster_settings_preserved": 2
+          },
+          "documentation_attempts": 7,
+          "median_successful": {
+            "elapsed_s": 37.910256805000245,
+            "tool_calls": 13.0,
+            "llm_requests": 8.0,
+            "agent_tool_calls": 11.0
+          }
+        },
+        "help": {
+          "trials": 2,
+          "valid": 1,
+          "successes": 1,
+          "invalid": 1,
+          "read_trials": 0,
+          "criterion_successes": {
+            "ip_approval": 1,
+            "ips_minimal": 1,
+            "no_forbidden_transition": 1,
+            "one_cluster": 1,
+            "ports_minimal": 1,
+            "unrelated_cluster_settings_preserved": 1
+          },
+          "documentation_attempts": 1,
+          "median_successful": {
+            "elapsed_s": 44.44001442298759,
+            "tool_calls": 13,
+            "llm_requests": 9,
+            "agent_tool_calls": 11
+          }
+        },
+        "contextual": {
+          "trials": 2,
+          "valid": 2,
+          "successes": 2,
+          "invalid": 0,
+          "read_trials": 2,
+          "criterion_successes": {
+            "ip_approval": 2,
+            "ips_minimal": 2,
+            "no_forbidden_transition": 2,
+            "one_cluster": 2,
+            "ports_minimal": 2,
+            "unrelated_cluster_settings_preserved": 2
+          },
+          "documentation_attempts": 0,
+          "median_successful": {
+            "elapsed_s": 29.140499207001994,
+            "tool_calls": 14.0,
+            "llm_requests": 6.5,
+            "agent_tool_calls": 8.0
+          }
+        },
+        "help_minus_baseline": {
+          "successful_pairs": 1,
+          "deltas": [
+            {
+              "seed": 82,
+              "elapsed_s": 18.00570650899317,
+              "tool_calls": 2,
+              "llm_requests": 3,
+              "agent_tool_calls": 3
+            }
+          ],
+          "median": {
+            "elapsed_s": 18.00570650899317,
+            "tool_calls": 2,
+            "llm_requests": 3,
+            "agent_tool_calls": 3
+          }
+        },
+        "contextual_minus_baseline": {
+          "successful_pairs": 2,
+          "deltas": [
+            {
+              "seed": 81,
+              "elapsed_s": -22.35960042302031,
+              "tool_calls": -2,
+              "llm_requests": -4,
+              "agent_tool_calls": -7
+            },
+            {
+              "seed": 82,
+              "elapsed_s": 4.82008522702381,
+              "tool_calls": 4,
+              "llm_requests": 1,
+              "agent_tool_calls": 1
+            }
+          ],
+          "median": {
+            "elapsed_s": -8.76975759799825,
+            "tool_calls": 1.0,
+            "llm_requests": -1.5,
+            "agent_tool_calls": -3.0
+          }
+        }
+      },
+      "selected_groups": [
+        {
+          "seed": 81,
+          "source_run": "benchmark-results/procedure-snat-v3-20261117"
+        },
+        {
+          "seed": 82,
+          "source_run": "benchmark-results/procedure-snat-v3-20261117"
+        }
+      ]
     },
     {
       "id": "procedure-upgrade-subnet-preflight",
