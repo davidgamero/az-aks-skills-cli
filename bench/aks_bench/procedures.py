@@ -3,6 +3,7 @@
 import copy
 import json
 import random
+import hashlib
 
 from .candidate_fixtures import obj, put, key
 
@@ -58,7 +59,10 @@ def make(name, seed, base):
         sc["apiVersion"]="storage.k8s.io/v1"
         disk_id=c["id"].split("/providers/")[0]+"/providers/Microsoft.Compute/disks/data-disk"
         put(w,obj("PersistentVolume","data-volume","",{"capacity":{"storage":"3072Gi"},"storageClassName":"application-disk","persistentVolumeReclaimPolicy":"Retain","accessModes":["ReadWriteOnce"],"claimRef":{"name":"data","namespace":"retail"},"csi":{"driver":"disk.csi.azure.com","volumeHandle":disk_id}},status={"phase":"Bound"}))
-        w["disk"]={"id":disk_id,"name":"data-disk","resourceGroup":c["resourceGroup"],"sku":{"name":sku},"diskSizeGb":3072,"diskState":"Attached","dataHash":"synthetic-preserved-ledger"}
+        ledger=f"synthetic ledger seed={seed}; entries=100; balance=12000\n"
+        checksum=hashlib.sha256(ledger.encode()).hexdigest()
+        w["disk_files"]={"/mnt/data/ledger.txt":ledger,"/mnt/data/ledger.checksum":checksum+"\n"}
+        w["disk"]={"id":disk_id,"name":"data-disk","resourceGroup":c["resourceGroup"],"sku":{"name":sku},"diskSizeGb":3072,"diskState":"Attached","dataHash":checksum}
         w["filesystem_gib"]=3072;w["downtime_seen"]=False
         task="Expand the application's existing disk-backed volume to the approved target using the appropriate procedure for the actual disk type. Preserve data and resource identities, avoid unnecessary downtime, restore the workload and verify capacity from inside it."
     else:

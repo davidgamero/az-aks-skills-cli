@@ -3,8 +3,12 @@
 import copy
 import json
 import re
+import hashlib
+import shlex
+from urllib.parse import urlparse
+import yaml
 
-from .candidate_runtime import World, WorldError, canonical, quantity, ALIASES, CLUSTER_KINDS, BOOLS
+from .candidate_runtime import World, WorldError, canonical, quantity, json_patch, ALIASES, CLUSTER_KINDS, BOOLS
 from .candidate_fixtures import obj, put, key
 
 ALIASES.update({"pv":"persistentvolume","persistentvolumes":"persistentvolume","sc":"storageclass","storageclasses":"storageclass"})
@@ -63,11 +67,13 @@ class ProcedureWorld(World):
             if ports*sum(v["count"] for v in self.cluster["agentPoolProfiles"])>64000*ips:raise WorldError("InvalidLoadBalancerProfileAllocatedOutboundPorts","not enough outbound capacity for the current nodes")
             p.update(allocatedOutboundPorts=ports,managedOutboundIPs={"count":ips})
             return {k:v for k,v in self.cluster.items() if not k.startswith("_")},[]
-        if command in ("network lb outbound-rule list","network lb show") and self.name=="procedure-snat-surge-budget":
+        if command in ("network lb outbound-rule list","network lb show","network lb list") and self.name=="procedure-snat-surge-budget":
             p=self.cluster["networkProfile"]["loadBalancerProfile"]
             rule={"name":"aksOutboundRule","allocatedOutboundPorts":p["allocatedOutboundPorts"],"idleTimeoutInMinutes":p["idleTimeoutInMinutes"],"frontendIPConfigurations":[{"id":"/synthetic/outbound/"+str(i)} for i in range(p["managedOutboundIPs"]["count"])]}
-            return ([rule] if command.endswith("list") else {"outboundRules":[rule]}),["lb_effective"]
-        if command=="disk show" and "disk" in self.w:return self.w["disk"],[]
+            lb={"name":"kubernetes","resourceGroup":self.cluster["nodeResourceGroup"],"id":"/synthetic/loadBalancers/kubernetes","sku":{"name":"Standard"},"outboundRules":[rule]}
+            return ([lb] if command=="network lb list" else [rule] if command.endswith("list") else lb),["lb_effective"]
+        if command=="disk show" and "disk" in self.w:return {k:v for k,v in self.w["disk"].items() if k!="dataHash"},[]
+        if command=="role assignment list":return [r for r in self.w["roles"] if not o.get("--scope") or r["scope"]==o["--scope"]],[]
         if self.name=="procedure-backup-region-eligibility":
             if command=="disk list":return self.w["backup_disks"],[]
             if command=="disk show":
@@ -76,14 +82,35 @@ class ProcedureWorld(World):
                 return row,[]
             if command in ("dataprotection backup-vault show","dataprotection backup-vault list"):
                 return ([self.w["vault_backup"]] if command.endswith("list") else self.w["vault_backup"]),[]
+            if command in ("dataprotection backup-policy list","dataprotection backup-instance list"):
+                return [],[]  # Prospective eligibility inventory; no protection/restore job is asserted.
         raise WorldError("MockNotImplemented",command+" outside bounded procedure model",0,2)
 
     def kube(self,words,o,tail):
         ns=o.get("--namespace","retail")
+        if words[:1]==["patch"] and o.get("--type")=="json":
+            operations=yaml.safe_load(o.get("--patch") or self.files.get(o.get("--patch-file"),"[]"))
+            if any(v.get("op") in ("move","copy") for v in operations):
+                ref=words[1].split("/",1);kind=ref[0];name=ref[1] if len(ref)>1 else words[2]
+                resource=self.get(kind,name,ns)
+                if resource is None:raise WorldError("NotFound","patch target not found",404)
+                document=copy.deepcopy(resource)
+                for operation in operations:
+                    if operation.get("op") in ("move","copy"):
+                        value=document
+                        for part in operation["from"].strip("/").split("/"):
+                            part=part.replace("~1","/").replace("~0","~")
+                            value=value[int(part)] if isinstance(value,list) else value[part]
+                        value=copy.deepcopy(value)
+                        if operation["op"]=="move":document=json_patch(document,[{"op":"remove","path":operation["from"]}])
+                        document=json_patch(document,[{"op":"add","path":operation["path"],"value":value}])
+                    else:document=json_patch(document,[operation])
+                return self.apply(document),[]
         if self.name=="procedure-coredns-import-reload" and words[:1]==["logs"] and ns=="kube-system":
             cm=self.get("configmap","coredns-custom","kube-system")
             return "CoreDNS ready; imported custom/*.server and custom/*.override; ignored files: "+", ".join(k for k in cm["data"] if not k.endswith((".server",".override"))),[]
         if words[:1]==["rollout"] and len(words)>2 and words[1] in ("restart","status") and "coredns" in " ".join(words[2:]):
+            if ns!="kube-system":raise WorldError("NotFound","coredns is not in this namespace",404)
             if words[1]=="restart":
                 self.w["dns_loaded"]=copy.deepcopy(self.get("configmap","coredns-custom","kube-system")["data"])
                 return 'deployment.apps/coredns restarted',[]
@@ -94,9 +121,29 @@ class ProcedureWorld(World):
 
     def probe(self,namespace,args):
         if args[:2] in (["sh","-c"],["bash","-c"]) and len(args)==3:
-            import shlex
-            if any(c in args[2] for c in (";","|","&&","$(","`")):raise WorldError("MockNotImplemented","compound remote probe outside fixture",0,2)
+            if any(c in args[2] for c in ("|","&&","$(","`")):raise WorldError("MockNotImplemented","compound remote probe outside fixture",0,2)
+            parts=re.split(r"(?<!\\);",args[2])
+            if len(parts)>1:
+                outputs=[];tags=[]
+                for part in parts:
+                    if not part.strip():continue
+                    value,observed=self.probe(namespace,shlex.split(part));outputs.append(value);tags.extend(observed)
+                return "\n".join(outputs),tags
             args=shlex.split(args[2])
+        if args[:2]==["cat","/etc/resolv.conf"]:
+            return "nameserver 10.100.0.10\nsearch retail.svc.cluster.local svc.cluster.local cluster.local\noptions ndots:5",[]
+        if args and args[0]=="curl":
+            urls=[urlparse(v) for v in args if v.startswith(("http://","https://"))]
+            if not urls:raise WorldError("ArgumentError","URL required",0,2)
+            url=urls[-1]
+            if url.hostname in ("localhost","127.0.0.1","10.100.0.20") and url.path in ("/ready","/health"):
+                if not self.get("deployment","api")["status"]["readyReplicas"]:raise WorldError("Unavailable","no ready application endpoint",503,22)
+                return "HTTP/1.1 200 OK\nready=true",[]
+            if self.name=="procedure-snat-surge-budget" and url.hostname in ("example.com","www.microsoft.com","api.ipify.org"):
+                return ("198.51.100.51" if url.hostname=="api.ipify.org" else "HTTP/1.1 200 OK\nmodeled external connectivity probe"),[]
+            raise WorldError("MockNotImplemented","HTTP destination outside bounded procedure model",0,2)
+        if self.name=="procedure-snat-surge-budget" and args and args[0] in ("nslookup","dig") and "example.com" in args:
+            return "Name: example.com\nAddress: 93.184.215.14",[]
         if self.name=="procedure-coredns-import-reload" and args and args[0] in ("nslookup","dig","getent"):
             text=" ".join(args);x=self.context
             if x["private_query"] in text:
@@ -109,6 +156,21 @@ class ProcedureWorld(World):
             if "legacy.internal" in text:return "Name: legacy.internal\nAddress: 10.2.0.9",[]
         if self.name=="procedure-disk-expand-boundary":
             if not self.get("deployment","api")["status"]["readyReplicas"]:raise WorldError("NotFound","no running workload pod",404)
-            if args and args[0]=="df":return f"Filesystem 1G-blocks Used Available Use% Mounted on\n/dev/sdc {self.w['filesystem_gib']} 128 4000 3% /mnt/data",["filesystem"]
-            if args and args[0] in ("sha256sum","cat") and "/mnt/data/ledger.checksum" in args:return self.w["disk"]["dataHash"],[]
+            if args and args[0]=="df":
+                size=self.w["filesystem_gib"]
+                if "-B1" in args:return f"Filesystem 1B-blocks Used Available Use% Mounted on\n/dev/sdc {size*1024**3} 1024 4096 1% /mnt/data",["filesystem"]
+                if "-k" in args:return f"Filesystem 1K-blocks Used Available Use% Mounted on\n/dev/sdc {size*1024**2} 1024 4096 1% /mnt/data",["filesystem"]
+                if any(v.startswith("-h") for v in args):return f"Filesystem Size Used Avail Use% Mounted on\n/dev/sdc {size/1024:.1f}T 128G 4.0T 3% /mnt/data",["filesystem"]
+                return f"Filesystem 1G-blocks Used Available Use% Mounted on\n/dev/sdc {size} 128 4000 3% /mnt/data",["filesystem"]
+            files=self.w["disk_files"]
+            if args and args[0]=="ls" and args[-1]=="/mnt/data":return ".\n..\nledger.txt\nledger.checksum",[]
+            if args and args[0]=="find" and "/mnt/data" in args:
+                if "-exec" in args:
+                    if "sha256sum" not in args:raise WorldError("MockNotImplemented","find execution outside bounded read-only checksum operation",0,2)
+                    return "\n".join(hashlib.sha256(value.encode()).hexdigest()+"  "+name for name,value in files.items()),[]
+                return "\n".join(files),[]
+            if args and args[0] in ("sha256sum","cat"):
+                targets=[v for v in args[1:] if not v.startswith("-")]
+                if not targets or any(v not in files for v in targets):raise WorldError("NotFound","requested mount file does not exist",404)
+                return "\n".join(files[v] if args[0]=="cat" else hashlib.sha256(files[v].encode()).hexdigest()+"  "+v for v in targets),[]
         raise WorldError("MockNotImplemented","probe outside procedure fixture: "+" ".join(args),0,2)

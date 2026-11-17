@@ -122,4 +122,21 @@ controls include current-count-only SNAT sizing, DNS apply without reload/direct
 verification, wrong disk-type branching, lost data, incomplete eligibility rows
 and falsely equating Operational snapshot cadence with cross-region RPO.
 
-Live results will be added after the frozen run and trace review.
+## First live smoke and coverage corrections
+
+The first 24 live trials at `45e3cca` are retained under
+`benchmark-results/procedure-comparison-20261117`. Every trial hit a coverage gap:
+the agent naturally used routine application HTTP checks, file listing/checksum
+probes or JSON Patch move operations not exercised by reference sequences. The
+backup assessment also queried prospective policies/instances and the SNAT task
+listed load balancers. These runs are **invalid for performance comparisons**,
+even though most state oracles passed. They are not baseline failures to attribute
+to missing skills.
+
+Corrections add those bounded read operations, real synthetic mount-file/checksum
+consistency and RFC-style patch move/copy handling without host shell execution.
+Backup blocker grading accepts equivalent identification of Files as a driver/tier
+restriction rather than penalizing an extra truthful field. The initial run is not
+silently rescored: a full new frozen 24-trial wave follows. The initial contextual
+condition read skills in six of eight trials; help-only read none. This is retrieval
+evidence from invalid performance trials, not a content-value estimate.

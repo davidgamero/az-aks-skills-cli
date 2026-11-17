@@ -39,6 +39,7 @@ def grade(s,state):
         checks.update(pvc_preserved=pvc is not None and pvc["metadata"]["uid"]==bw["resources"][key("persistentvolumeclaim","retail","data")]["metadata"]["uid"],
             pv_preserved=pv is not None and pv["metadata"]["uid"]==bw["resources"][key("persistentvolume","","data-volume")]["metadata"]["uid"],
             disk_preserved=w["disk"]["id"]==bw["disk"]["id"] and w["disk"]["dataHash"]==bw["disk"]["dataHash"],
+            actual_data_preserved=w["disk_files"]==bw["disk_files"],
             disk_sku_preserved=w["disk"]["sku"]==bw["disk"]["sku"],
             target_disk_size=w["disk"]["diskSizeGb"]==s["context"]["target_size_gib"],
             filesystem_expanded=w["filesystem_gib"]==s["context"]["target_size_gib"],
@@ -60,7 +61,9 @@ def grade(s,state):
             if disk and disk["encryption"]["diskEncryptionSetId"]:reasons.add("diskEncryptionSetId")
             if not spec.get("storageClassName"):reasons.add("storageClassName")
             entry=entries.get(n,{})
-            checks["eligibility_"+n]=entry.get("eligible") is (not reasons) and isinstance(entry.get("blockers"),list) and all(isinstance(v,str) for v in entry["blockers"]) and set(entry["blockers"])==reasons
+            accepted=[reasons]
+            if driver=="file.csi.azure.com":accepted+=[{"driver"},{"backupTier","driver"}]
+            checks["eligibility_"+n]=entry.get("eligible") is (not reasons) and isinstance(entry.get("blockers"),list) and all(isinstance(v,str) for v in entry["blockers"]) and set(entry["blockers"]) in accepted
         checks["paired_region_rpo"]=report.get("worst_case_rpo_hours")==36
         data=lambda v:{k:value for k,value in v.items() if k not in ("observations","generation","probe_history")}
         checks["read_only"]=data(w)==data(bw)

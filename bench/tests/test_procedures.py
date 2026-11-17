@@ -93,3 +93,28 @@ class ProcedureTests(unittest.TestCase):
         self.assertEqual(data["runnable_scenarios"],38);self.assertEqual(data["designed_only"],20)
         self.assertEqual(len(names),58)
         self.assertFalse(any("comparison" in e for e in data["scenarios"]))
+
+    def test_json_patch_move_and_standard_dns_input_read(self):
+        sim=self.sim(NAMES[1])
+        result=execute(sim,kube("patch","configmap/coredns-custom","-n","kube-system","--type=json","-p",json.dumps([{"op":"move","from":"/data/private.conf","path":"/data/private.server"}])))
+        self.assertEqual(result["exit_code"],0,result)
+        result=execute(sim,kube("exec","deployment/api","--","cat","/etc/resolv.conf"))
+        self.assertIn("10.100.0.10",result["stdout"])
+
+    def test_routine_health_and_disk_file_probes_are_bounded_and_consistent(self):
+        sim=self.sim(NAMES[2]);before=sim.state_hash()
+        for args in (("ls","-la","/mnt/data"),("find","/mnt/data","-type","f","-exec","sha256sum","{}",";"),
+                     ("sh","-c",r"ls -la /mnt/data; find /mnt/data -type f -exec sha256sum {} \;"),
+                     ("curl","-fsS","http://127.0.0.1:8080/ready")):
+            result=execute(sim,kube("exec","deployment/api","--",*args))
+            self.assertEqual(result["exit_code"],0,(args,result))
+        self.assertEqual(before,sim.state_hash())
+        self.assertEqual(execute(sim,kube("exec","deployment/api","--","cat","/mnt/data/missing"))["exit_code"],1)
+
+    def test_files_backup_blocker_equivalence_is_not_false_positive(self):
+        sim=self.sim(NAMES[3]);self.solve(sim)
+        row=next(v for v in sim.state["_procedure_report"]["volumes"] if v["name"].endswith("-4"))
+        for blockers in (["driver"],["backupTier"],["driver","backupTier"]):
+            row["blockers"]=blockers;self.assertTrue(grade(sim.scenario,sim.state)["success"])
+        row["blockers"]=["driver","sizeGiB"]
+        self.assertFalse(grade(sim.scenario,sim.state)["success"])
