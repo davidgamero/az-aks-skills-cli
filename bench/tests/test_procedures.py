@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 import sys
 import unittest
+import tempfile
 
 from aks_bench.candidate_solutions import execute,patch,kube
 from aks_bench.mock import Simulator
@@ -105,6 +106,7 @@ class ProcedureTests(unittest.TestCase):
         sim=self.sim(NAMES[2]);before=sim.state_hash()
         for args in (("ls","-la","/mnt/data"),("find","/mnt/data","-type","f","-exec","sha256sum","{}",";"),
                      ("sh","-c",r"ls -la /mnt/data; find /mnt/data -type f -exec sha256sum {} \;"),
+                     ("sh","-c","curl -fsS http://127.0.0.1:8080/ready && df -h /mnt/data"),
                      ("curl","-fsS","http://127.0.0.1:8080/ready")):
             result=execute(sim,kube("exec","deployment/api","--",*args))
             self.assertEqual(result["exit_code"],0,(args,result))
@@ -127,3 +129,21 @@ class ProcedureTests(unittest.TestCase):
         sim=self.sim(NAMES[2]);result=sim.call(["vmss","list","-g",sim.state["clusters"][0]["nodeResourceGroup"]])
         self.assertEqual(result["exit_code"],0)
         self.assertEqual(len(json.loads(result["stdout"])),2)
+
+    def test_master_selection_replaces_whole_group_including_invalids(self):
+        sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+        from master_scenarios import build
+        with tempfile.TemporaryDirectory() as d:
+            paths=[]
+            for index in range(2):
+                path=Path(d)/str(index);path.mkdir();paths.append(path)
+                (path/"run.json").write_text(json.dumps({"action":"discover","model":"test-model","source_sha256":str(index),"catalog_sha256":"same"}))
+                for condition in ("baseline","help","contextual"):
+                    trial=path/condition;trial.mkdir()
+                    row={"scenario":NAMES[0],"seed":81,"condition":condition,"mode":"live","valid_trial":not (index==1 and condition=="help"),
+                        "success":True,"elapsed_s":10+index,"tool_calls":5,"llm_requests":2,"skill_reads":0,"state_grade":{"checks":{"correct":True}}}
+                    (trial/"result.json").write_text(json.dumps(row))
+            result=next(e for e in build(paths)["scenarios"] if e["id"]==NAMES[0])
+            self.assertEqual(result["comparison"]["help"]["invalid"],1)
+            self.assertEqual(result["comparison"]["baseline"]["median_successful"]["elapsed_s"],11)
+            self.assertEqual(result["comparison"]["baseline"]["trials"],1)

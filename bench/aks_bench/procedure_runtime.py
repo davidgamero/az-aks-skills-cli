@@ -128,8 +128,8 @@ class ProcedureWorld(World):
 
     def probe(self,namespace,args):
         if args[:2] in (["sh","-c"],["bash","-c"]) and len(args)==3:
-            if any(c in args[2] for c in ("|","&&","$(","`")):raise WorldError("MockNotImplemented","compound remote probe outside fixture",0,2)
-            parts=re.split(r"(?<!\\);",args[2])
+            if any(c in args[2] for c in ("|","$(","`")):raise WorldError("MockNotImplemented","compound remote probe outside fixture",0,2)
+            parts=re.split(r"(?<!\\);|\s*&&\s*",args[2])
             if len(parts)>1:
                 outputs=[];tags=[]
                 for part in parts:

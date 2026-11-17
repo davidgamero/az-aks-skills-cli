@@ -154,3 +154,15 @@ claim that every possible end-to-end backup latency is proven to be 36 hours.
 Those missing inventory reads are added for a fresh targeted SNAT/detached-disk
 rerun. Invalid results remain excluded; the valid backup failures and DNS/disk
 comparisons are retained rather than rerun until they pass.
+
+The targeted SNAT/detached-disk reruns at `d1b8d16` are retained separately. One
+SNAT help-only run used a previously unsupported `&&` sequence of read-only HTTP
+probes; it remains invalid. A bounded diagnostic-sequence handler is added for
+future trials, not used to rewrite that result.
+
+The two completed disk pairs showed a contextual speed reduction, so a separate
+**exploratory replication** uses fresh seeds 83–85, three conditions each. It is
+post-selection follow-up, not a held-out task or a predeclared significance test.
+Results from every replication seed will be retained. The master generator selects
+complete scenario/seed groups from explicitly ordered run inputs, never the fastest
+arm from different revisions, and includes invalid/failed selected rows.
