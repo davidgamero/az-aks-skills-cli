@@ -1,5 +1,11 @@
 # Stateful AKS skills benchmark
 
+The [master scenario registry](master-scenarios.md) contains 58 specific cases:
+38 runnable and 20 designed-only. The latest [guide-procedure wave](procedure-comparison.md)
+adds SNAT surge sizing, persistent CoreDNS custom reload, disk-SKU expansion
+branching and volume-specific cross-region backup eligibility. Historical and
+new evaluations remain separately versioned.
+
 The current default is the [symptom-first investigation/discovery suite](investigation-discovery.md):
 seven intermittent-egress and GPU/KAITO cases. Use `discover` to compare no skills,
 help-only discovery and contextual diagnostic references. Earlier repair scenarios

@@ -97,6 +97,12 @@ def commands(s):
 
 
 def execute(simulator, command):
+    if isinstance(command,dict) and command.get("reference_procedure_plan"):
+        from .procedure_solutions import backup_assessment
+        simulator.state["_procedure_report"]=backup_assessment(simulator.scenario)
+        import time
+        simulator.first_goal_s=simulator.verified_goal_s=time.monotonic()-simulator.started
+        return {"stdout":"","stderr":"","exit_code":0}
     if isinstance(command,dict) and command.get("reference_incident_report"):
         from .investigation_solutions import report
         simulator.state["_incident_report"]=report(simulator.scenario,simulator.state)

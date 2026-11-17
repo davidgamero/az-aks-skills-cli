@@ -132,7 +132,7 @@ needed. The included skills are small examples for exercising the interface.
 
 [`docs/benchmark.md`](docs/benchmark.md) describes the runnable skills-vs-no-skills
 experiment: stateful fake clusters, scripted success/errors across a captured
-99-command AKS registry, 34 research-derived scenarios, rootless/Docker
+99-command AKS registry, 38 research-derived runnable scenarios, rootless/Docker
 containers, timestamped call traces, state-based scoring, and model/network metrics.
 
 It uses your local Copilot CLI (`gpt-6.1-sol` by default), with model selection and
@@ -163,6 +163,13 @@ tasks, with **zero skill reads**—no demonstrated skill-content benefit.
 
 ## Task-focused skill design
 
+The [master scenario list](docs/master-scenarios.md) brings together **58 cases**:
+38 runnable and 20 designed-only, including 24 newly specified guide procedures.
+The [first procedure-comparison wave](docs/procedure-comparison.md) tests four of
+those in baseline/help-only/contextual conditions and records time, CLI calls,
+model calls and actual retrieval. Its four procedures bring the benchmark catalog
+to 31 skills; older reports keep their original catalog counts.
+
 The [consecutive-error fallback study](docs/error-fallback-study.md) researches
 where skills add value and adds `aks_bench error-ladder`: matched trials with
 variable numbers of ARM-style or CLI failures, no skill hints in errors, and
@@ -175,8 +182,7 @@ two CLI errors and ignored the skill entry; no retrieval threshold was observed.
 The current default is the [investigation discovery suite](docs/investigation-discovery.md):
 seven symptom-first intermittent-networking and GPU/KAITO cases. `aks_bench discover`
 compares baseline, AKS-help discovery and contextual diagnostic references using
-identical prompts and evidence. Two new investigation procedures bring the catalog
-to 27 skills. The source review includes Azure/AKS-Skills, its maintained Microsoft
+identical prompts and evidence. That study used a 27-skill catalog. The source review includes Azure/AKS-Skills, its maintained Microsoft
 successor and relevant Learn documentation.
 In the latest seven-case smoke comparison, contextual references produced **4/7
 skill reads versus 0/7 with help-only discovery**. Baseline agents still identified

@@ -1,0 +1,1100 @@
+{
+  "schema_version": 1,
+  "reviewed_on": "2026-11-17",
+  "runnable_scenarios": 38,
+  "designed_only": 20,
+  "notes": "One registry, not one pooled statistical study. New comparison rows only summarize explicitly supplied live runs; historical trials remain separate. No positive content claim when skills were unread.",
+  "new_wave_runs": [],
+  "scenarios": [
+    {
+      "id": "acr-abac-pull-repair",
+      "topic": "registry",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "ABAC mode does not honor classic AcrPull; Repository Reader and an approved condition may be required. The pull identity is the kubelet identity.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/connectivity/cannot-pull-image-from-acr-to-aks-cluster",
+        "https://learn.microsoft.com/en-us/azure/aks/cluster-container-registry-integration",
+        "https://learn.microsoft.com/en-us/azure/container-registry/container-registry-rbac-abac-repository-permissions"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "acr-private-data-endpoint",
+      "topic": "registry",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Login and data endpoints are different; successful authentication does not establish blob/data connectivity.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/connectivity/cannot-pull-image-from-acr-to-aks-cluster",
+        "https://learn.microsoft.com/en-us/azure/aks/cluster-container-registry-integration"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "api-connectivity-stage-repair",
+      "topic": "networking",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Client DNS/TCP, authentication, operation-specific authorization and API-server-to-kubelet connectivity are distinct. An unauthenticated 401 can demonstrate reachability.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/connectivity/troubleshoot-cluster-connection-issues-api-server",
+        "https://learn.microsoft.com/en-us/azure/aks/faq",
+        "https://learn.microsoft.com/en-us/azure/aks/network-policy-best-practices"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "automatic-admission-mutation-quota",
+      "topic": "automatic-nap",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "The effective admitted resource requests can differ from the submitted manifest. Missing resources may be defaulted; admission rejection, resource mutation and quota denial are different stages.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/deployment-safeguards",
+        "https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic",
+        "https://learn.microsoft.com/en-us/azure/aks/concepts-managed-namespaces"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "automatic-create",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "automatic-maintenance",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "autoscaler",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "control-plane-upgrade",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "csi-rotation-consumption-mode",
+      "topic": "secrets",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Mounted files/synced Secret objects can update, but process environment variables are captured at pod start; file consumers also need application reload behavior.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-configuration-options",
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/extensions/troubleshoot-key-vault-csi-secrets-store-csi-driver"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "csi-secret-sync-alias",
+      "topic": "secrets",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "secretObjects sync requires a live mounting pod, and objectName must match the mounted file/objectAlias rather than blindly copying the vault object name.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/csi-secrets-store-configuration-options",
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/extensions/troubleshoot-key-vault-csi-secrets-store-csi-driver"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "debug-automatic-provider",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "debug-managed-namespace-quota",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "debug-version-skew",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "egress-incident-localdns",
+      "topic": "investigation",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/investigation-discovery.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "egress-incident-snat",
+      "topic": "investigation",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/investigation-discovery.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "egress-incident-upstream",
+      "topic": "investigation",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/investigation-discovery.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "gateway-api-publish",
+      "topic": "ingress",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "The app-routing GatewayClass is approuting-istio, not the mesh class istio. New Automatic 1.36+ defaults, older clusters, managed CRDs and incompatible mesh installations change the setup path.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/app-routing-gateway-api",
+        "https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "gpu-incident-container-memory",
+      "topic": "investigation",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/investigation-discovery.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "gpu-incident-device-memory",
+      "topic": "investigation",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/investigation-discovery.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "gpu-incident-kaito-quota",
+      "topic": "investigation",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/investigation-discovery.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "gpu-incident-plugin",
+      "topic": "investigation",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/investigation-discovery.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "identity-binding-mixed-audiences",
+      "topic": "identity",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "A projected token has one audience. api://AKSIdentityBinding cannot be reused as api://AzureADTokenExchange; bindings also require SDK opt-in and Kubernetes authorization.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview",
+        "https://learn.microsoft.com/en-us/azure/aks/identity-bindings-concepts",
+        "https://learn.microsoft.com/en-us/azure/aks/identity-bindings"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "managed-namespace-adopt-identical",
+      "topic": "managed-namespaces",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "IfIdentical requires the proposed managed fields to match existing state; Always can overwrite them, while Never rejects an existing namespace.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/concepts-managed-namespaces",
+        "https://learn.microsoft.com/en-us/azure/aks/managed-namespaces"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "managed-namespace-detach-keep",
+      "topic": "managed-namespaces",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Keep deletes the ARM management resource but retains the namespace; Delete removes the namespace and its contents.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/concepts-managed-namespaces",
+        "https://learn.microsoft.com/en-us/azure/aks/managed-namespaces"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "managed-namespace-rbac-plane",
+      "topic": "managed-namespaces",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Namespace User/Contributor are management-plane roles; Kubernetes data-plane Reader/Writer/Admin have different permissions and scopes.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/concepts-managed-namespaces",
+        "https://learn.microsoft.com/en-us/azure/aks/managed-namespaces",
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/connectivity/troubleshoot-cluster-connection-issues-api-server"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "managed-namespace-selective-ingress",
+      "topic": "managed-namespaces",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Standard NetworkPolicy permissions combine additively; an allow-all policy is not narrowed by adding another restrictive-looking policy.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/concepts-managed-namespaces",
+        "https://learn.microsoft.com/en-us/azure/aks/network-policy-best-practices",
+        "https://kubernetes.io/docs/concepts/services-networking/network-policies/"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "manual-scale",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "nap-capacity-control-plane",
+      "topic": "automatic-nap",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "ARM agent pools and Karpenter NodePool CRDs are different. Dynamic NAP CPU/memory limits, static replicas/limits.nodes, Azure quota and pod constraints require different actions.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/node-auto-provisioning-node-pools",
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/extensions/troubleshoot-node-auto-provision",
+        "https://learn.microsoft.com/en-us/azure/aks/intro-aks-automatic"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "nap-image-pickup-versus-disruption",
+      "topic": "automatic-nap",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "The AKS window controls when NAP picks up a new image; drift logic and node/pod disruption budgets control replacement. These decisions are separate from ordinary node-image channel assumptions.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/node-auto-provisioning-upgrade-image",
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/extensions/troubleshoot-node-auto-provision",
+        "https://learn.microsoft.com/en-us/azure/aks/node-auto-provisioning-node-pools"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "overlay-cidr-exhaustion",
+      "topic": "networking",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Overlay allocates per-node pod CIDR blocks; pod CIDR exhaustion differs from VNet subnet exhaustion or Azure VM quota. Expansion must meet platform and superset constraints.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/extensions/troubleshoot-node-auto-provision",
+        "https://learn.microsoft.com/en-us/azure/aks/azure-cni-overlay-pod-expand"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "pdb-preserving-upgrade",
+      "topic": "upgrades",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Eviction TooManyRequests due to zero disruptions is not an ARM throttle. Extra replicas help some budgets, but not every percentage/zero-unavailability policy.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/create-upgrade-delete/error-code-poddrainfailure",
+        "https://learn.microsoft.com/en-us/azure/aks/faq"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "procedure-application-consistent-snapshot",
+      "topic": "backup",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Is a ReadyToUse disk snapshot enough to recover the database consistently?",
+      "missing_procedure": "Quiesce writes using the application's supported protocol, snapshot the correct volume, restore a new consumer and validate application/data consistency rather than snapshot metadata alone.",
+      "source_ids": [
+        "disk",
+        "backup-matrix"
+      ],
+      "negative_control": "Snapshot during uncontrolled writes and declare application consistency.",
+      "holdouts": [
+        "multi-volume database",
+        "crash-consistent accepted",
+        "quiesce failure",
+        "restored data copy still running"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/create-volume-azure-disk",
+        "https://learn.microsoft.com/en-us/azure/backup/azure-kubernetes-service-cluster-backup-support-matrix"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-autoscaler-scale-down-proof",
+      "topic": "autoscaling",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Why do idle nodes remain after lowering the autoscaler maximum?",
+      "missing_procedure": "Use requests/allocatable rather than CPU usage alone; inspect move feasibility, PDB/safe-to-evict/local storage and timers; distinguish scale-up cap from scale-down eligibility.",
+      "source_ids": [
+        "ca"
+      ],
+      "negative_control": "Force node deletion or assume maxCount enforces unconditional shrink.",
+      "holdouts": [
+        "unmanaged pod",
+        "anti-affinity",
+        "cooldown only",
+        "DaemonSet requests"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/cluster-autoscaler-overview"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-backup-region-eligibility",
+      "topic": "backup",
+      "priority": "P1",
+      "build_status": "implemented",
+      "question": "Does our vault configuration really protect every PV against regional failure?",
+      "missing_procedure": "Join PV driver/class and disk size/access/DES fields; separate Operational/Vault tier, paired-region restore and secondary RPO.",
+      "source_ids": [
+        "backup-matrix",
+        "backup-restore",
+        "backup-crr"
+      ],
+      "negative_control": "Call every CSI volume eligible, conflate four-hour snapshots with Vault RPO or weaken security to pass eligibility.",
+      "holdouts": [
+        "Azure Files SMB/NFS",
+        "DES/private disk",
+        "unknown metadata",
+        "missing CRR",
+        "nonpaired target"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/backup/azure-kubernetes-service-cluster-backup-support-matrix",
+        "https://learn.microsoft.com/en-us/azure/backup/azure-kubernetes-service-cluster-restore",
+        "https://learn.microsoft.com/en-us/azure/backup/tutorial-restore-aks-backups-across-regions"
+      ],
+      "runnable": true,
+      "evaluation_status": "not_live_evaluated"
+    },
+    {
+      "id": "procedure-backup-restore-role-chain",
+      "topic": "backup",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "A supported recovery point exists, so why does target restore validation fail?",
+      "missing_procedure": "Separate extension identity, vault identity, trusted access, target/snapshot/staging scopes and restore-tier roles; validate before starting and preserve security constraints.",
+      "source_ids": [
+        "backup-restore",
+        "backup-crr"
+      ],
+      "negative_control": "Grant subscription Owner or repeatedly restart restore without checking its named principal/scope.",
+      "holdouts": [
+        "Operational versus Vault",
+        "static Files role",
+        "cross subscription",
+        "staging cleanup"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/backup/azure-kubernetes-service-cluster-restore",
+        "https://learn.microsoft.com/en-us/azure/backup/tutorial-restore-aks-backups-across-regions"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-cni-dynamic-batches",
+      "topic": "network-capacity",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Why is the pod subnet full when visible pod IP use looks low?",
+      "missing_procedure": "Separate node/pod subnets; account for per-node 16-address allocations, refill below eight free, surge and churn before comparing NNC allocations to apparent demand.",
+      "source_ids": [
+        "dynamic-cni",
+        "ip-plan"
+      ],
+      "negative_control": "Use Overlay /24-per-node arithmetic or count only Running pods.",
+      "holdouts": [
+        "refill boundary",
+        "shared pod subnet",
+        "high churn",
+        "static block allocation"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni-dynamic-ip-allocation",
+        "https://learn.microsoft.com/en-us/azure/aks/concepts-network-ip-address-planning"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-coredns-import-reload",
+      "topic": "dns",
+      "priority": "P1",
+      "build_status": "implemented",
+      "question": "Why does custom DNS work directly or briefly but not persist through normal pod resolution?",
+      "missing_procedure": "Use coredns-custom import suffixes, preserve main/legacy config, reload and verify affected plus preserved query paths.",
+      "source_ids": [
+        "coredns",
+        "q-dns"
+      ],
+      "negative_control": "Edit managed Corefile, use an unimported suffix, omit process reload or verify only direct upstream.",
+      "holdouts": [
+        "server versus override context",
+        "LocalDNS enabled",
+        "forwarder unreachable",
+        "already-loaded configuration"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/coredns-custom",
+        "https://learn.microsoft.com/en-us/answers/questions/2337666/aks-coredns-override-reverting-automatically-dns-r"
+      ],
+      "runnable": true,
+      "evaluation_status": "not_live_evaluated"
+    },
+    {
+      "id": "procedure-csi-retain-migration",
+      "topic": "storage",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "How do we migrate in-tree volumes without creating empty replacement disks?",
+      "missing_procedure": "Set Retain before logical object removal; preserve physical disk handle, prebind replacement CSI PV/PVC and verify data/consumer continuity.",
+      "source_ids": [
+        "csi-migrate",
+        "disk",
+        "pv"
+      ],
+      "negative_control": "Delete a Delete-policy claim first or create an unrelated dynamically provisioned disk.",
+      "holdouts": [
+        "existing claimRef",
+        "zonal disk",
+        "filesystem type",
+        "rollback after partial migration"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/csi-migrate-in-tree-volumes",
+        "https://learn.microsoft.com/en-us/azure/aks/create-volume-azure-disk",
+        "https://kubernetes.io/docs/concepts/storage/persistent-volumes/"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-disk-expand-boundary",
+      "topic": "storage",
+      "priority": "P1",
+      "build_status": "implemented",
+      "question": "Can this existing PVC grow beyond 4 TiB without downtime?",
+      "missing_procedure": "Branch on actual disk SKU, detach when required, grow existing claim, restore consumer and verify mounted filesystem/data without recreation.",
+      "source_ids": [
+        "disk",
+        "q-disk"
+      ],
+      "negative_control": "Treat all disk types as online or take unnecessary downtime for Premium v2.",
+      "holdouts": [
+        "Premium v1 versus v2",
+        "below boundary",
+        "multiple consumers",
+        "filesystem expansion pending"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/create-volume-azure-disk",
+        "https://learn.microsoft.com/en-us/answers/questions/5874095/aks-premium-ssd-zrs-confirming-dynamic-pvc-expansi"
+      ],
+      "runnable": true,
+      "evaluation_status": "not_live_evaluated"
+    },
+    {
+      "id": "procedure-disk-zone-safe-recovery",
+      "topic": "storage",
+      "priority": "P2",
+      "build_status": "designed",
+      "question": "A retained LRS disk will not attach after a zone change; should we just edit node labels?",
+      "missing_procedure": "Compare actual disk zone and eligible capacity; preserve truthful topology and data, choose a same-zone pool or approved storage migration instead of falsifying labels/affinity.",
+      "source_ids": [
+        "disk-mount",
+        "disk"
+      ],
+      "negative_control": "Relabel a physical zone or remove PV affinity to pretend cross-zone LRS attachment works.",
+      "holdouts": [
+        "ZRS disk",
+        "no capacity in zone",
+        "new unbound PVC",
+        "old attachment"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/fail-to-mount-azure-disk-volume",
+        "https://learn.microsoft.com/en-us/azure/aks/create-volume-azure-disk"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-files-key-stale-mount",
+      "topic": "storage",
+      "priority": "P2",
+      "build_status": "designed",
+      "question": "Why does Azure Files still fail after its Kubernetes secret was updated?",
+      "missing_procedure": "Classify DNS/TCP445 versus SMB auth/cipher failure, verify key version without disclosing it and resolve stale mount/consumer lifecycle through an approved remount path.",
+      "source_ids": [
+        "files-mount"
+      ],
+      "negative_control": "Rotate working credentials for a network timeout or declare success from Secret metadata alone.",
+      "holdouts": [
+        "private DNS",
+        "NTLM policy",
+        "old node mount",
+        "NFS exclusion"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/troubleshoot/azure/azure-kubernetes/storage/fail-to-mount-azure-file-share"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-gitops-durable-repair",
+      "topic": "gitops",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Why does a successful live patch revert, and how do we make the repair durable?",
+      "missing_procedure": "Trace field ownership to Flux source/path, modify the approved repository overlay, reconcile and verify revision; restore any authorized temporary suspension and avoid prune-driven data loss.",
+      "source_ids": [
+        "flux"
+      ],
+      "negative_control": "Leave reconciliation suspended or edit only live resources.",
+      "holdouts": [
+        "HelmRelease",
+        "immutable field",
+        "depends_on",
+        "prune-protected storage"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/azure-arc/kubernetes/gitops-flux2-parameters"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-hpa-sidecar-requests",
+      "topic": "autoscaling",
+      "priority": "P2",
+      "build_status": "designed",
+      "question": "HPA reports missing CPU requests although the application container has them; why?",
+      "missing_procedure": "Inspect admitted pod and every container, including injected sidecars, then distinguish resource metric denominator problems from provider/RBAC errors.",
+      "source_ids": [
+        "hpa"
+      ],
+      "negative_control": "Reinstall metrics-server or increase node capacity without checking actual container requests.",
+      "holdouts": [
+        "duplicate YAML resources key",
+        "ContainerResource metric",
+        "provider outage",
+        "VPA interaction"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/horizontal-pod-autoscaler"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-ingress-controller-boundary",
+      "topic": "ingress",
+      "priority": "P2",
+      "build_status": "designed",
+      "question": "A new routing object exists but traffic still reaches the old controller; what is missing?",
+      "missing_procedure": "Identify actual ingress/Gateway ownership, listener/parent attachment and backend readiness, preserve old routes and verify hostname/TLS/path before authorized DNS cutover.",
+      "source_ids": [
+        "slb",
+        "admission"
+      ],
+      "negative_control": "Delete existing routing or switch DNS based only on resource creation.",
+      "holdouts": [
+        "mesh versus app routing",
+        "unowned class",
+        "certificate/SNI mismatch",
+        "cross-namespace reference"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/configure-load-balancer-standard",
+        "https://learn.microsoft.com/en-us/azure/architecture/operator-guides/aks/aks-triage-controllers"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-kubelet-certificate-scope",
+      "topic": "security",
+      "priority": "P2",
+      "build_status": "designed",
+      "question": "Which certificate failed, and would rotating the cluster CA cause avoidable downtime?",
+      "missing_procedure": "Distinguish serving/client/CA identities, inspect actual expiry/signer/rotation state and choose supported component-specific action; do not approve arbitrary CSRs or rotate the whole cluster blindly.",
+      "source_ids": [
+        "certs"
+      ],
+      "negative_control": "Disable TLS verification or treat every x509 error as expired cluster CA.",
+      "holdouts": [
+        "upcoming DataAction requirement",
+        "custom workload cert",
+        "stale kubeconfig",
+        "image-based rotation limitation"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/certificate-rotation"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-local-traffic-health",
+      "topic": "ingress",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Are unhealthy LB backends evidence of broken nodes when externalTrafficPolicy is Local?",
+      "missing_procedure": "Join ready local endpoint placement, healthCheckNodePort and Azure probe behavior; distinguish expected nonserving-node probe failure from a real probe/path fault without losing source IP.",
+      "source_ids": [
+        "slb",
+        "q-probe"
+      ],
+      "negative_control": "Switch to Cluster just to make probes green or declare every nonlocal node broken.",
+      "holdouts": [
+        "terminating endpoints",
+        "all endpoints unhealthy",
+        "Cluster mode",
+        "port-specific annotations"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/configure-load-balancer-standard",
+        "https://learn.microsoft.com/en-us/answers/questions/2284526/aks-ingress-lb-ports-80-443-closed-health-probes-f"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-os-retirement-migration",
+      "topic": "lifecycle",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Why can our old Azure Linux pool no longer scale even though Kubernetes still runs?",
+      "missing_procedure": "Pin retirement dates and supported OS/Kubernetes/FIPS matrix; distinguish node-image refresh from OS SKU migration, stage workload validation and preserve rollback feasibility.",
+      "source_ids": [
+        "os"
+      ],
+      "negative_control": "Assume a node-image-only update necessarily moves to a supported OS major version.",
+      "holdouts": [
+        "versioned Ubuntu SKU",
+        "FIPS",
+        "unsupported VM size",
+        "pool-only versus cluster upgrade"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/upgrade-os-version"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-outbound-migration-cutover",
+      "topic": "egress",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Can we move to NAT Gateway without breaking API access or external allowlists?",
+      "missing_procedure": "Use actual managed/BYO migration matrix, associate required egress resources, update allowlists/authorized IPs and plan disruption/verification before cutover.",
+      "source_ids": [
+        "egress-migrate"
+      ],
+      "negative_control": "Assume public egress IP is preserved or choose a managed-VNet-only mode on BYO networking.",
+      "holdouts": [
+        "StandardV2 downgrade",
+        "private API",
+        "UDR path",
+        "rollback eligibility"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/egress-outboundtype"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-pls-proxy-health",
+      "topic": "ingress",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Why did enabling Private Link PROXY protocol break otherwise healthy Local-service probes?",
+      "missing_procedure": "Check PROXY-header support of the actual health endpoint, distinguish kube-proxy health port from app probes and configure an authorized compatible probe/receiver pair.",
+      "source_ids": [
+        "slb"
+      ],
+      "negative_control": "Assume Local /healthz supports PROXY headers or change direct managed-LB configuration.",
+      "holdouts": [
+        "shared probes preview",
+        "app lacks PROXY support",
+        "multiple PLS resources",
+        "dual stack"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/configure-load-balancer-standard"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-priority-expander-match",
+      "topic": "autoscaling",
+      "priority": "P2",
+      "build_status": "designed",
+      "question": "Why are Spot pools ignored even with a priority expander?",
+      "missing_procedure": "Verify exact group-name regex coverage, priority ordering and fallback eligibility using current pool identities rather than copying ambiguous sample priorities.",
+      "source_ids": [
+        "ca"
+      ],
+      "negative_control": "Reverse higher/lower priority or leave the intended node group unmatched.",
+      "holdouts": [
+        "similar names",
+        "quota backoff",
+        "no toleration",
+        "one unmatched group"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/cluster-autoscaler-overview"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-reclaim-released-volume",
+      "topic": "storage",
+      "priority": "P2",
+      "build_status": "designed",
+      "question": "Can we recover a Released retained PV after a claim was accidentally deleted?",
+      "missing_procedure": "Verify Retain and disk/data identity, resolve the old claim reservation, explicitly bind the new claim and verify content without deleting the physical asset.",
+      "source_ids": [
+        "pv",
+        "disk"
+      ],
+      "negative_control": "Assume same claim name means same UID or permit a default class to provision new storage.",
+      "holdouts": [
+        "stale UID",
+        "class mismatch",
+        "insufficient size",
+        "new claimant race"
+      ],
+      "sources": [
+        "https://kubernetes.io/docs/concepts/storage/persistent-volumes/",
+        "https://learn.microsoft.com/en-us/azure/aks/create-volume-azure-disk"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-service-ip-expand",
+      "topic": "network-capacity",
+      "priority": "P2",
+      "build_status": "designed",
+      "question": "Can we extend service address capacity without recreating a supported cluster?",
+      "missing_procedure": "Gate on supported version/allocator and address plan; add ServiceCIDR, preserve existing IPAddress ownership and verify new allocation; distinguish extension from moving the original service range.",
+      "source_ids": [
+        "servicecidr",
+        "ip-plan"
+      ],
+      "negative_control": "Mutate immutable original range or delete a range still containing live service IPs.",
+      "holdouts": [
+        "older version",
+        "overlap with routable VNet",
+        "finalizer",
+        "dual stack"
+      ],
+      "sources": [
+        "https://kubernetes.io/docs/tasks/network/extend-service-ip-ranges/",
+        "https://learn.microsoft.com/en-us/azure/aks/concepts-network-ip-address-planning"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-snat-surge-budget",
+      "topic": "egress",
+      "priority": "P1",
+      "build_status": "implemented",
+      "question": "How many outbound IPs and per-node ports do we need at maximum scale, including upgrades?",
+      "missing_procedure": "Round per-node ports to eight, include all pool maxima and approved concurrent surge, size 64000-port frontends and update the AKS owner rather than its reconciled LB.",
+      "source_ids": [
+        "slb",
+        "rolling",
+        "q-snat"
+      ],
+      "negative_control": "Fit current nodes only or edit generated outbound rule.",
+      "holdouts": [
+        "fixed and autoscaled pools",
+        "percentage boundary",
+        "shared inbound frontend",
+        "NAT Gateway exclusion"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/configure-load-balancer-standard",
+        "https://learn.microsoft.com/en-us/azure/aks/upgrade-aks-node-pools-rolling",
+        "https://learn.microsoft.com/en-us/answers/questions/1294363/prevent-snat-port-exhaustion-in-aks-standard-load"
+      ],
+      "runnable": true,
+      "evaluation_status": "not_live_evaluated"
+    },
+    {
+      "id": "procedure-upgrade-subnet-preflight",
+      "topic": "upgrade",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Why does one pool's upgrade fail for another subnet?",
+      "missing_procedure": "Inventory every pool/subnet, distinguish CNI modes, use applicable maxima and surge, account for reserved/other addresses, and select an authorized feasible upgrade envelope.",
+      "source_ids": [
+        "rolling",
+        "ip-plan",
+        "dynamic-cni"
+      ],
+      "negative_control": "Apply legacy maxPods formula to Overlay or inspect only the upgraded pool.",
+      "holdouts": [
+        "shared subnets",
+        "concurrent upgrades",
+        "quota versus subnet",
+        "IPv6"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/upgrade-aks-node-pools-rolling",
+        "https://learn.microsoft.com/en-us/azure/aks/concepts-network-ip-address-planning",
+        "https://learn.microsoft.com/en-us/azure/aks/configure-azure-cni-dynamic-ip-allocation"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "procedure-webhook-scoped-recovery",
+      "topic": "admission",
+      "priority": "P1",
+      "build_status": "designed",
+      "question": "Deployments are blocked by a webhook; can we recover without globally disabling enforcement?",
+      "missing_procedure": "Read matched webhook rules, service endpoints, TLS and tunnel evidence, then restore the failing relationship or use an explicitly approved narrow exception with rollback.",
+      "source_ids": [
+        "admission"
+      ],
+      "negative_control": "Set every failurePolicy to Ignore or assume a healthy pod proves API-server reachability.",
+      "holdouts": [
+        "expired certificate",
+        "wrong service selector",
+        "self-deadlock",
+        "intermittent tunnel failure"
+      ],
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/architecture/operator-guides/aks/aks-triage-controllers"
+      ],
+      "runnable": false,
+      "evaluation_status": "design_only"
+    },
+    {
+      "id": "stop-dev",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "transient-scale",
+      "topic": "operational-control",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Existing bounded task; retain as a control and consult its historical report rather than inferring a new procedural gap.",
+      "sources": [],
+      "historical_reports": [
+        "docs/benchmark.md"
+      ],
+      "priority": "control"
+    },
+    {
+      "id": "workload-federation-versus-rbac",
+      "topic": "identity",
+      "runnable": true,
+      "build_status": "implemented",
+      "evaluation_status": "historical_evidence_not_pooled",
+      "missing_procedure": "Issuer/subject/audience mismatch breaks token exchange; a resource 403 after token success is a different authorization or network problem.",
+      "sources": [
+        "https://learn.microsoft.com/en-us/azure/aks/workload-identity-overview",
+        "https://learn.microsoft.com/en-us/azure/aks/workload-identity-deploy-cluster"
+      ],
+      "historical_reports": [
+        "docs/candidate-evaluation.md"
+      ],
+      "priority": "control"
+    }
+  ]
+}

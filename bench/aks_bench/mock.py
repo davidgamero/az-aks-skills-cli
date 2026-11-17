@@ -196,7 +196,7 @@ class Simulator:
     def dispatch_call(self, argv, tool="az", files=None, stdin=None):
         if self.scenario.get("suite") == "investigation-v1":
             return self.investigation_call(argv, tool)
-        if self.scenario.get("suite") == "candidate-v1":
+        if self.scenario.get("suite") in ("candidate-v1","procedure-v1"):
             return self.candidate_call(argv, tool, files, stdin)
         if tool != "az":
             return self.external_call(tool, argv)
@@ -400,6 +400,9 @@ class Simulator:
     def candidate_call(self, argv, tool, files, stdin):
         from .candidate_runtime import World, WorldError, parse as world_parse
         from .candidate_oracles import verified
+        if self.scenario.get("suite")=="procedure-v1":
+            from .procedure_runtime import ProcedureWorld as World
+            from .procedure_oracles import verified
         if tool == "curl" and any(documentation.approved(a) for a in argv if a.startswith("https://")):
             return self.external_call(tool, argv)
         with self.lock:
@@ -450,6 +453,14 @@ class Simulator:
                 event.update(error_code=error.code, http_status=error.status)
                 if error.code.startswith("Mock"): event["category"] = "coverage_gap"
             end = time.monotonic()
+            if self.scenario.get("suite")=="procedure-v1" and self.skills and self.hint_policy=="contextual" and event["category"]!="skill":
+                help_surface=any(a in ("--help","-h") for a in argv)
+                diagnostic=tool=="kubectl" and argv[:1] in (["get"],["describe"],["logs"],["exec"]) or tool=="az" and command.startswith(("aks show","aks nodepool","disk ","network lb","dataprotection "))
+                surface="help" if help_surface else "diagnostic" if diagnostic else None
+                if surface and surface not in self.hint_surfaces:
+                    self.hint_surfaces.add(surface)
+                    response["stderr"]+=f"Related diagnostic procedure: az aks skill show --name {self.scenario['procedure_skill']}\n"
+                    event["discovery_hint"]={"surface":surface,"skill_id":self.scenario["procedure_skill"]}
             goal = grade(self.scenario, self.state)["success"]
             if goal:
                 self.first_goal_s = self.first_goal_s or end-self.started
@@ -515,6 +526,9 @@ class Simulator:
 
     def help(self, command):
         text = self.base_help(command)
+        if self.scenario.get("suite")=="procedure-v1":
+            if command=="aks update":text+="\nEgress arguments: --load-balancer-outbound-ports (multiple of 8); --load-balancer-managed-outbound-ip-count\n"
+            if command.startswith("dataprotection backup-vault"):text+="\nArguments: --vault-name; --resource-group -g; --query; --output -o\n"
         if self.scenario.get("suite") == "candidate-v1":
             from .candidate_help import help_text
             text = help_text(command) or text

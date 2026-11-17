@@ -25,6 +25,7 @@ from . import troubleshooting
 from . import catalogs
 from . import candidate_fixtures, candidate_solutions
 from . import investigations, investigation_solutions
+from . import procedures, procedure_solutions
 
 COPILOT_HOSTS = {"api.github.com", "api.githubcopilot.com", "api.individual.githubcopilot.com",
                  "api.business.githubcopilot.com", "api.enterprise.githubcopilot.com",
@@ -185,6 +186,7 @@ def telemetry(path):
 
 
 def oracle_commands(scenario):
+    if scenario.get("suite")=="procedure-v1":return procedure_solutions.commands(scenario)
     if scenario.get("suite") == "investigation-v1":
         return investigation_solutions.commands(scenario)
     if scenario.get("suite") == "candidate-v1":
@@ -279,6 +281,13 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
         isolation_path = artifacts / "isolation.json"
         isolation = json.loads(isolation_path.read_text()) if isolation_path.exists() else {}
     sim.advance()
+    if scenario.get("suite")=="procedure-v1" and scenario["name"]=="procedure-backup-region-eligibility" and mode!="replay":
+        path=workspace/"assessment.json"
+        try:
+            if path.resolve().is_relative_to(workspace.resolve()) and path.stat().st_size<=262144:
+                submission=json.loads(path.read_text())
+                if isinstance(submission,dict):sim.state["_procedure_report"]=submission
+        except (OSError,ValueError):pass
     if scenario.get("suite")=="investigation-v1" and mode!="replay":
         path=workspace/"diagnosis.json"
         try:
@@ -294,6 +303,10 @@ def trial(args, scenario_name, seed, skills, directory, mode="live"):
     if scenario.get("suite") == "candidate-v1":
         from .candidate_oracles import verified
         final_verified = verified(scenario, sim.state)
+    if scenario.get("suite")=="procedure-v1":
+        from .procedure_oracles import verified
+        final_verified=verified(scenario,sim.state)
+        if final_verified and scenario["name"]=="procedure-backup-region-eligibility":sim.first_goal_s=sim.verified_goal_s=elapsed
     unsupported = sum(e["category"] == "coverage_gap" for e in sim.events)
     result = {"scenario": scenario["name"], "seed": seed, "skills": skills,
               "condition": getattr(args, "condition", "skills" if skills else "baseline"),
@@ -439,8 +452,8 @@ def main(argv=None):
         parser.error("--fixture requires exactly one --scenarios entry")
     if args.action == "compare" and args.reference_skills_dir is None:
         parser.error("compare requires --reference-skills-dir")
-    if args.action=="discover" and any(n not in investigations.NAMES for n in args.scenarios):
-        parser.error("discover requires investigation scenarios")
+    if args.action=="discover" and any(n not in investigations.NAMES+procedures.NAMES for n in args.scenarios):
+        parser.error("discover requires investigation or procedure scenarios")
     if args.action=="error-ladder" and (any(v < -1 for v in args.failure_counts) or len(set(args.failure_counts))!=len(args.failure_counts)):
         parser.error("failure counts must be distinct integers >= -1")
     if args.action == "coverage":
